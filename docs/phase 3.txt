@@ -1,0 +1,86 @@
+Phase 3: Advanced Features and Integrations + Admin Polish (4 Months)
+
+Goal:
+
+Add **Could Have** features: bonus campaigns, gamification, multilingual support, non-Shopify POS, advanced analytics, developer toolkit, and finalize admin module.
+
+Enhancements & Best Practices:
+
+- Implement load balancer and stateless services for horizontal scaling.
+- Overlap testing with Phase 2 feedback to iterate on RFM and referrals.
+- Set go/no-go milestone: TVP must achieve 90% merchant satisfaction and 5%+ referral conversion.
+- Monitor API latency, error rates, and database performance with Grafana dashboards.
+- Conduct accessibility (a11y) and localization testing for widget and dashboard.
+
+Features:
+
+1. Bonus Campaigns:
+   - Types: Time-sensitive promotions, goal spend, points multipliers, limited-time bonuses.
+   - Conditions: Scheduled via no-code dashboard, tied to purchases.
+
+2. Gamification:
+   - Badges, leaderboards in widget.
+
+3. On-Site Content:
+   - Rewards Sticky Bar, checkout extensions, point calculators.
+
+4. Integrations:
+   - Non-Shopify POS (Square, Lightspeed).
+   - Gorgias, Yotpo Reviews & UGC, Postscript, Shopify Flow.
+
+5. Settings:
+   - Multilingual widget (10+ languages with customizable text).
+   - Multi-currency discounts.
+   - Developer toolkit for Shopify metafields.
+
+6. Analytics:
+   - Advanced reports (25+ metrics: ROI, customer behavior, redemption rates).
+   - Comparisons with similar stores.
+
+7. Admin Module:
+   - Platform settings, integration health, RFM segment export.
+   - Advanced analytics dashboard (Chart.js).
+
+Database Schema:
+
+- Add `bonus_campaigns`, `gamification_achievements`, `nudges`, `nudge_events`.
+- Indexes: `bonus_campaigns(merchant_id)`, `nudges(merchant_id)`.
+- Update `merchants.language` for multilingual support.
+
+Tasks:
+
+1. Backend (NestJS/TypeScript):
+   - APIs: `/api/campaigns`, `/api/gamification`, `/api/nudges`, `/api/integrations`.
+   - Integrations: Gorgias, Yotpo, Postscript, Square, Lightspeed.
+   - Use AI for code, Jest tests.
+
+2. Backend (Rust/Wasm):
+   - Shopify Functions: Campaign discounts, gamification rewards.
+
+3. Frontend (Vite + React):
+   - Pages: `CampaignsPage.tsx`, `GamificationPage.tsx`, `SettingsPage.tsx` (multilingual, developer tools).
+   - Update `AnalyticsPage.tsx` with advanced reports.
+   - On-Site Content: Sticky Bar, checkout extensions.
+   - Admin frontend: Integration health, RFM export.
+
+4. Testing:
+   - Unit: Jest for APIs, campaign/gamification logic.
+   - Integration: Non-Shopify POS, Gorgias/Yotpo.
+   - E2E: Multilingual widget, advanced analytics (Cypress).
+   - Load test: 10,000 customers.
+
+5. Deployment:
+   - VPS with Docker, Nginx, Cloudflare CDN for multilingual content.
+   - Optimize PostgreSQL with partitioning for `points_transactions`, `referrals`.
+
+Timeline:
+
+- Month 12–13: Bonus campaigns, gamification, Sticky Bar.
+- Month 14–15: Non-Shopify POS, multilingual support, advanced analytics.
+
+Deliverables:
+
+- **Could Have** features: Bonus campaigns, gamification, multilingual widget, non-Shopify POS, advanced analytics, developer toolkit.
+- Polished admin module with integration health and RFM export.
+- Updated test suite, VPS deployment with CDN.
+- Merchant documentation with multilingual and campaign guides.

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Progress Chart</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        .input-container { margin: 20px auto; max-width: 800px; }
+        .input-group { margin: 10px; display: inline-block; }
+        label { margin-right: 5px; font-size: 16px; }
+        input { width: 80px; padding: 8px; font-size: 16px; }
+        button { padding: 12px 24px; margin: 15px; background-color: #4CAF50; color: white; border: none; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #45a049; }
+        #taskChart { width: 100% !important; height: 600px !important; max-width: 1000px; margin: auto; }
+        h2 { font-size: 24px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h2>Project Task Progress Summary</h2>
+    <div class="input-container">
+        <div class="input-group">
+            <label for="allTasks">All Tasks:</label>
+            <input type="number" id="allTasks" value="50" min="0">
+        </div>
+        <div class="input-group">
+            <label for="inProgress">In Progress:</label>
+            <input type="number" id="inProgress" value="10" min="0">
+        </div>
+        <div class="input-group">
+            <label for="thisWeek">This Week:</label>
+            <input type="number" id="thisWeek" value="8" min="0">
+        </div>
+        <div class="input-group">
+            <label for="testing">Testing:</label>
+            <input type="number" id="testing" value="5" min="0">
+        </div>
+        <div class="input-group">
+            <label for="done">Done:</label>
+            <input type="number" id="done" value="20" min="0">
+        </div>
+        <div class="input-group">
+            <label for="backlog">Backlog:</label>
+            <input type="number" id="backlog" value="15" min="0">
+        </div>
+        <br>
+        <button onclick="updateChart()">Update Chart</button>
+    </div>
+    <canvas id="taskChart"></canvas>
+    <script>
+        const ctx = document.getElementById('taskChart').getContext('2d');
+        let taskChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['All Tasks', 'In Progress', 'This Week', 'Testing', 'Done', 'Backlog'],
+                datasets: [{
+                    label: 'Number of Tasks',
+                    data: [50, 10, 8, 5, 20, 15],
+                    backgroundColor: [
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(255, 206, 86, 0.6)',
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(153, 102, 255, 0.6)',
+                        'rgba(255, 159, 64, 0.6)',
+                        'rgba(255, 99, 132, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Number of Tasks', font: { size: 16 } },
+                        ticks: { font: { size: 14 } }
+                    },
+                    x: {
+                        title: { display: true, text: 'Task Categories', font: { size: 16 } },
+                        ticks: { font: { size: 14 } }
+                    }
+                },
+                plugins: {
+                    legend: { display: true, position: 'top', labels: { font: { size: 14 } } },
+                    title: { display: true, text: 'Task Distribution Across Categories', font: { size: 18 } }
+                }
+            }
+        });
+
+        function updateChart() {
+            const allTasks = parseInt(document.getElementById('allTasks').value) || 0;
+            const inProgress = parseInt(document.getElementById('inProgress').value) || 0;
+            const thisWeek = parseInt(document.getElementById('thisWeek').value) || 0;
+            const testing = parseInt(document.getElementById('testing').value) || 0;
+            const done = parseInt(document.getElementById('done').value) || 0;
+            const backlog = parseInt(document.getElementById('backlog').value) || 0;
+
+            taskChart.data.datasets[0].data = [allTasks, inProgress, thisWeek, testing, done, backlog];
+            taskChart.update();
+        }
+    </script>
+</body>
+</html>

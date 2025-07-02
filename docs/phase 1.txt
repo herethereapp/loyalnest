@@ -1,0 +1,127 @@
+Phase 1: TVP Development + Internal Admin Module (7 Months)
+
+Goal:
+
+Build a production-grade TVP with **Must Have** features: points (purchases, signups, reviews, birthdays), SMS/email referrals (Twilio), basic RFM analytics (churn risk), Shopify POS integration (points earning), automated loyalty email flows, data import, and a simplified admin module.
+
+Enhancements & Best Practices:
+
+- Generate OpenAPI/Swagger docs for NestJS APIs.
+- Integrate centralized logging (Loki/Grafana) and monitoring (Prometheus, Grafana) on VPS.
+- Add health checks and alerting for NestJS, Rust, Redis, PostgreSQL, Nginx.
+- Schedule weekly PostgreSQL/Redis backups and quarterly disaster recovery drills.
+- Conduct manual exploratory and accessibility (a11y) testing for dashboard, widget, and admin UI.
+- Integrate PostHog for feature usage tracking (e.g., RFM wizard completion, referral popup clicks).
+- Implement guided onboarding (in-app tooltips, checklists) for merchants.
+- Conduct early usability testing of RFM setup wizard and SMS referral popup with 5–10 merchants.
+- Review security practices (OAuth, JWT, GDPR, field-level encryption for `customers.email`, `rfm_score`) bi-monthly.
+- Audit npm, cargo, and Docker dependencies monthly.
+- Document infrastructure as code (Docker Compose, Nginx) in GitHub.
+- Allocate 10% buffer time for freelancer coordination and AI code review.
+- Maintain developer and merchant documentation with screenshots and 1–2 minute videos for key flows (e.g., RFM setup, points configuration).
+
+TVP Features:
+
+1. Welcome Page:
+   - Setup tasks (launch program, add widget to theme, configure points, basic RFM).
+   - Congratulatory messages (e.g., first redemption, first referral).
+2. Program - Points:
+   - Earn: Purchases (1 point/$), signups (200 points), reviews (100 points), birthdays (200 points).
+   - Redeem: Discounts (500 points for $5), free shipping (1,000 points), free products (1,500 points), coupons at checkout.
+   - Branding: Customizable rewards panel, launcher button, points currency (e.g., "Stars").
+   - Status: Enable/disable program.
+3. Program - Referrals:
+   - SMS/email referral popup via Twilio, rewarding referrer/friend (10% off).
+   - Dedicated referral page with incentives for both.
+   - Track codes in `referrals` table (pending, completed, expired).
+4. Customers:
+   - List with name, email, points balance, RFM segment (e.g., "At-Risk").
+   - Search by name/email.
+5. Analytics:
+   - Metrics: Program members, points transactions, referral ROI, RFM-based churn risk (static thresholds: Recency <90 days, Frequency 1–2, Monetary <$50 for AOV $50).
+   - Chart: Bar chart for RFM segments in `AnalyticsPage.tsx` (Chart.js).
+6. On-Site Content:
+   - SEO-friendly loyalty page, rewards panel, launcher button, points display on product pages.
+   - Nudges: Post-purchase prompts, email capture popups.
+   - Launchers: Embedded in Shopify checkout and customer accounts.
+7. Settings:
+   - Store details, billing (Free: 300 orders, $29/month: 500 orders, $99/month: 1,500 orders).
+   - Branding: Basic rewards panel customization.
+   - RFM: Static thresholds (e.g., Recency 5: <30 days) in `program_settings.rfm_thresholds` (JSONB).
+8. Shopify Integration:
+   - OAuth via `@shopify/shopify-app-express`, `orders/create` webhook for points/RFM updates.
+   - POS: Points earning (1 point/$).
+9. Other:
+   - Automated loyalty email flows (e.g., points earned, redemption reminders).
+   - Data import from Smile.io, LoyaltyLion.
+10. Customer Widget:
+    - React component for points balance, redemption (discounts, free shipping), SMS/email referral popup, RFM nudges (e.g., "Stay Active!").
+
+Internal Admin Module Features:
+
+1. Overview: Merchant count, points issued/redeemed, referral ROI, RFM segments (Chart.js).
+2. Merchants: List (ID, domain, plan), search, view details, adjust points.
+3. Admin Users: Add/edit/delete admins in `admin_users` (bcrypt, JWT).
+4. Logs: View `api_logs`, `audit_logs` for debugging, RFM changes.
+
+Database Schema:
+
+- Tables: `merchants`, `customers` (with `rfm_score` JSONB), `points_transactions`, `referrals`, `rewards`, `reward_redemptions`, `program_settings` (with `rfm_thresholds` JSONB), `shopify_sessions`, `customer_segments`, `admin_users`, `api_logs`, `audit_logs`.
+- Indexes: `customers(email, merchant_id, rfm_score)`, `points_transactions(customer_id)`, `referrals(merchant_id)`.
+- Use PostgreSQL with JSONB for RFM configs; defer MongoDB to Phase 4.
+
+Tasks:
+
+1. Backend (NestJS/TypeScript):
+   - APIs: `/api/points` (purchases, signups, reviews, birthdays), `/api/referral` (SMS/email), `/api/analytics` (RFM segments, churn risk), `/api/data-import` (Smile.io/LoyaltyLion).
+   - Shopify: OAuth, `orders/create` webhook for points (1 point/$) and RFM updates (`rfm_score.r`).
+   - Twilio: SMS/email referrals, storing codes in `referrals` table.
+   - Admin APIs: `/admin/merchants`, `/admin/points/adjust`, `/admin/referrals`, `/admin/rfm-segments`, `/admin/logs` with JWT.
+   - Cache points, referrals, RFM scores in Redis.
+   - Use AI (GitHub Copilot, Cursor) for API boilerplate, Jest tests; manually review for Shopify compliance.
+
+2. Backend (Rust/Wasm):
+   - Shopify Functions: Discounts (amount/percentage off), basic RFM score updates.
+   - Use Shopify CLI for testing; generate Rust code and `cargo test` cases with AI.
+
+3. Frontend (Vite + React):
+   - Components: `WelcomePage.tsx` (setup, messages), `PointsPage.tsx` (configure earning/redemption), `ReferralsPage.tsx` (SMS/email config), `CustomersPage.tsx` (list, search), `AnalyticsPage.tsx` (RFM chart), `SettingsPage.tsx` (store, billing, branding), `CustomerWidget.tsx` (points, referrals, nudges).
+   - On-Site Content: SEO-friendly loyalty page, rewards panel, launcher button, points display, popups.
+   - Admin frontend: Dashboard, merchants, RFM segments, logs.
+   - Use AI for components, Cypress tests; outsource Polaris compliance review ($1,000).
+
+4. Database:
+   - Apply `herethere_full_schema.sql` with JSONB for `rfm_score`, `rfm_thresholds`.
+   - Add indexes for performance (e.g., `customers(email, merchant_id)`).
+   - Use AI for index optimization.
+
+5. Deployment:
+   - VPS (Ubuntu with Docker) using Docker Compose for NestJS, PostgreSQL, Redis, Vite + React frontend.
+   - Nginx for frontend assets and reverse proxy to NestJS APIs.
+   - GitHub Actions for CI/CD (testing, deployment to VPS).
+   - Provide Docker Compose scripts for VPS setup.
+
+6. Testing:
+   - Unit: Jest for NestJS APIs, `cargo test` for Rust Functions, Jest for RFM logic.
+   - Integration: Shopify/Twilio/RFM/data-import flows (Jest).
+   - E2E: Dashboard, widget, popups, RFM UI (Cypress).
+   - Load test: 5,000 customers with Redis/PostgreSQL.
+   - Outsource QA to freelancer ($2,500) for Cypress and exploratory testing.
+
+7. Shopify App Store:
+   - Optimize listing with demo videos (RFM analytics, SMS referrals, $29/month pricing, data import).
+   - Ensure Polaris, App Bridge, GDPR compliance (encrypt `customers.email`, `rfm_score`).
+
+Timeline:
+
+- Month 1–2: Schema, OAuth, Points/Referral APIs, static RFM analytics.
+- Month 3–4: Vite + React dashboard, widget, admin frontend, RFM chart, on-site content (loyalty page, popups).
+- Month 5–7: POS integration, Rust Functions, data import, testing, VPS deployment.
+
+Deliverables:
+
+- TVP with **Must Have** features: points, SMS/email referrals, basic RFM analytics, Shopify POS, email flows, data import.
+- Admin module with RFM segment views, merchant management, logs.
+- Shopify/Twilio/Yotpo/Klaviyo integrations.
+- Test suite, VPS deployment with Docker and Nginx.
+- Merchant documentation with setup guides and videos.

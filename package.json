@@ -1,0 +1,125 @@
+{
+  "name": "tvp-herethere",
+  "version": "1.0.0",
+  "description": "A monorepo for a Shopify app with NestJS backend and Vite+React frontend, using PostgreSQL and Redis.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^18.20 || ^20.10 || >=21.0.0"
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "remix vite:build",
+    "dev": "shopify app dev",
+    "config:link": "shopify app config link",
+    "generate": "shopify app generate",
+    "deploy": "shopify app deploy",
+    "config:use": "shopify app config use",
+    "env": "shopify app env",
+    "start": "remix-serve ./build/server/index.js",
+    "docker-start": "npm run setup && npm run start",
+    "setup": "prisma generate && prisma migrate deploy",
+    "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
+    "shopify": "shopify",
+    "prisma": "prisma",
+    "graphql-codegen": "graphql-codegen",
+    "vite": "vite",
+    "backend:dev": "cd backend && npm run start:dev",
+    "frontend:dev": "cd frontend && npm run dev",
+    "dev:monorepo": "concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "docker:up": "docker-compose up -d --build",
+    "docker:down": "docker-compose down",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "test": "cd backend && npm run test && cd ../frontend && npm run test",
+    "shopify:tunnel": "shopify app tunnel"
+  },
+  "dependencies": {
+    "@hapi/joi": "^17.1.1",
+    "@nestjs/cache-manager": "^3.0.1",
+    "@nestjs/common": "^11.1.3",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.3",
+    "@nestjs/platform-express": "^11.1.3",
+    "@nestjs/typeorm": "^11.0.0",
+    "@prisma/client": "^6.2.1",
+    "@remix-run/dev": "^2.16.1",
+    "@remix-run/fs-routes": "^2.16.1",
+    "@remix-run/node": "^2.16.1",
+    "@remix-run/react": "^2.16.1",
+    "@remix-run/serve": "^2.16.1",
+    "@shopify/app": "^3.7.0",
+    "@shopify/app-bridge-react": "^4.1.6",
+    "@shopify/polaris": "^12.0.0",
+    "@shopify/shopify-api": "^11.13.0",
+    "@shopify/shopify-app-remix": "^3.7.0",
+    "@shopify/shopify-app-session-storage-prisma": "^6.0.0",
+    "cache-manager": "^7.0.0",
+    "cache-manager-redis-store": "^3.0.1",
+    "ioredis": "^5.6.1",
+    "isbot": "^5.1.0",
+    "pg": "^8.16.2",
+    "prisma": "^6.2.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "typeorm": "^0.3.25",
+    "vite-tsconfig-paths": "^5.0.1"
+  },
+  "devDependencies": {
+    "@remix-run/eslint-config": "^2.16.1",
+    "@remix-run/route-config": "^2.16.1",
+    "@shopify/api-codegen-preset": "^1.1.1",
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^24.0.3",
+    "@types/react": "^18.2.31",
+    "@types/react-dom": "^18.2.14",
+    "concurrently": "^8.0.0",
+    "eslint": "^8.42.0",
+    "eslint-config-prettier": "^10.0.1",
+    "jest": "^29.0.0",
+    "prettier": "^3.2.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "vite": "^6.2.2"
+  },
+  "workspaces": [
+    "extensions/*"
+  ],
+  "trustedDependencies": [
+    "@shopify/plugin-cloudflare"
+  ],
+  "resolutions": {
+    "@graphql-tools/url-loader": "8.0.16",
+    "@graphql-codegen/client-preset": "4.7.0",
+    "@graphql-codegen/typescript-operations": "4.5.0",
+    "minimatch": "9.0.5"
+  },
+  "overrides": {
+    "@graphql-tools/url-loader": "8.0.16",
+    "@graphql-codegen/client-preset": "4.7.0",
+    "@graphql-codegen/typescript-operations": "4.5.0",
+    "minimatch": "9.0.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/herethereapp/tvp-herethere.git"
+  },
+  "keywords": [
+    "shopify",
+    "nestjs",
+    "react",
+    "vite",
+    "postgresql",
+    "redis"
+  ],
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/herethereapp/tvp-herethere/issues"
+  },
+  "homepage": "https://github.com/herethereapp/tvp-herethere#readme",
+  "author": "admin"
+}

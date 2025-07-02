@@ -1,0 +1,81 @@
+Competitor Analysis Template for Herethere Loyalty
+Competitor Name: [e.g., Smile.io]
+Overview
+	• App Name: 
+	• Website: 
+	• Shopify App Store URL: 
+	• Description: 
+	• Merchant Count: 
+	• Ratings/Reviews: 
+	• Shopify Certifications:
+Features
+	• Points Program: 
+		○ Earning Actions: 
+		○ Redemption Options: 
+		○ Customization:
+	• Referral Program: 
+		○ Sharing Options: 
+		○ Rewards: 
+		○ Popups/Nudges:
+	• VIP Tiers: 
+		○ Thresholds: 
+		○ Perks:
+	• On-Site Content: 
+		○ Widgets: 
+		○ Nudges: 
+		○ Launchers:
+	• Bonus Campaigns: 
+		○ Types: 
+		○ Conditions:
+	• Analytics: 
+		○ Reports: 
+		○ Segmentation: 
+		○ Insights:
+	• Integrations: 
+		○ Shopify POS: 
+		○ Email (e.g., Klaviyo): 
+		○ Reviews (e.g., Yotpo): 
+		○ Others:
+Pricing
+	• Free Plan: 
+		○ Order Limit: 
+		○ Features: 
+		○ Restrictions:
+	• Paid Plans: 
+		○ Tier 1: [Name, Price, Features, Orders]
+		○ Tier 2: 
+		○ Tier 3:
+	• Scalability Costs:
+User Experience
+	• Setup Time: 
+	• Customization: 
+		○ Branding: 
+		○ Emails: 
+		○ Widgets:
+	• Merchant Dashboard: 
+	• Customer UI:
+Support
+	• Availability: 
+	• Channels: 
+	• Quality: 
+	• User Feedback:
+Market Positioning
+	• Target Audience: 
+	• Unique Selling Points: 
+	• Case Studies:
+Performance Metrics
+	• Revenue Impact: 
+	• Repeat Purchase Rate: 
+	• Customer Retention:
+Weaknesses
+	• Feature Gaps: 
+	• Pricing Issues: 
+	• Technical Limitations: 
+	• User Complaints:
+Opportunities for Herethere Loyalty
+	• Feature Differentiation: 
+	• Pricing Advantage: 
+	• Integration Focus: 
+	• Support Improvements:
+Sources
+[e.g., Shopify App Store, Competitor Website, Third-Party Review]
