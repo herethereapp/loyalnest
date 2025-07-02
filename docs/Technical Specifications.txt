@@ -2,23 +2,8 @@ Creating Technical Specifications for the Herethere Loyalty App is essential to 
 
 Since I can’t generate graphical documents, I’ll provide a detailed text-based technical specification in Markdown, structured for clarity and actionable implementation. This can be stored in your project’s docs/specs.md file or used in Swagger/OpenAPI for API documentation. I’ll cover the points program’s core functionality (earning, redeeming, notifications) and touch on referrals and analytics, referencing the ERD and flow diagram.
 
-Materials Needed
-From our prior conversations, I have sufficient context to create the technical specifications:
+# Technical Specifications: Herethere Loyalty App
 
-App Context: A Shopify loyalty app for small/medium merchants with a points program (10 points per $1, 200 points for 10% discount), SMS referrals (Twilio), and analytics (PostHog), built with NestJS, Vite + React, PostgreSQL (JSONB), Redis, and Rust/Wasm.
-Points Program Logic: Handled via Shopify webhooks (orders/create), database updates (users, points_transactions, loyalty_config), Redis caching, and Twilio/SendGrid notifications.
-ERD: Tables for users (customer data, points balance), points_transactions (points history), and loyalty_config (merchant settings in JSONB).
-Flow Diagram: Outlines points-earning process (webhook → calculate points → update database → cache → notify).
-Wireframes: Merchant dashboard (Polaris-based) for settings/rewards and customer widget (Tailwind CSS) for points/redemption.
-To refine the specs, please confirm or specify:
-
-Scope: Should I focus on the points program (earning, redeeming, notifications) or include SMS referrals and analytics in detail? I’ll default to the points program core with brief notes on referrals/analytics.
-Detail Level: High-level (API endpoints, general logic) or detailed (code snippets, SQL queries, error handling)? I’ll provide a mid-level spec with endpoints, logic, and some code for clarity.
-Audience: For your own development, Shopify reviewers, or beta merchants? I’ll assume it’s for you (planning) and Shopify reviewers (technical validation).
-If no further details are provided, I’ll create a technical specification for the points program, covering APIs, webhooks, database interactions, and integrations, with enough detail to guide your NestJS implementation.
-
-Technical Specifications for Herethere Loyalty App
-Technical Specifications: Herethere Loyalty App
 Overview
 The Herethere Loyalty App is a Shopify app for small/medium merchants, providing a points-based loyalty program, SMS referrals, and analytics. This specification focuses on the points program, enabling customers to earn points (e.g., 1000 points for a $100 purchase), redeem points (e.g., 200 points for a 10% discount), and receive notifications. The app is built with:
 
@@ -26,44 +11,48 @@ Backend: NestJS, TypeORM, PostgreSQL (JSONB), Redis.
 Frontend: Vite + React, Shopify Polaris (merchant dashboard), Tailwind CSS (customer widget).
 Integrations: Shopify API (webhooks, discount codes), Twilio (SMS), SendGrid (email), PostHog (analytics), Rust/Wasm (Shopify Functions).
 Deployment: VPS with Docker Compose, Nginx.
+
 System Architecture
 Backend: NestJS handles API requests, Shopify webhooks, and business logic. TypeORM manages PostgreSQL queries. Redis caches points balances and configs.
 Frontend: React with Vite serves the merchant dashboard (Polaris) and customer widget (Tailwind). Shopify App Bridge ensures seamless integration.
 Database: PostgreSQL with JSONB for flexible merchant settings (e.g., points_per_dollar, rewards).
+
 External Services:
 Shopify Admin API for customer/order data and discount creation.
 Twilio for SMS notifications.
 SendGrid for email notifications.
 PostHog for analytics.
+
 Shopify Functions: Rust/Wasm for real-time points calculation at checkout (optional for MVP).
+
 Database Schema
 Refer to the ERD (docs/erd/herethere_loyalty.dbml):
 
 users: Stores customer data (shopify_customer_id, points_balance, email, phone).
 points_transactions: Logs points activities (transaction_id, shopify_customer_id, points_earned, points_spent, action_type, order_id).
 loyalty_config: Stores merchant settings (shop_id, config as JSONB with points_per_dollar, rewards).
+
 API Endpoints
+
 1. GET /api/customer/points
 Description: Retrieves a customer’s points balance and available rewards.
 Authentication: Shopify OAuth (customer session token).
+
 Request:
 http
-
 Collapse
-
 Wrap
-
 Copy
+
 GET /api/customer/points
 Headers: Authorization: Bearer <shopify_token>
+
 Response:
 json
-
 Collapse
-
 Wrap
-
 Copy
+
 {
   "balance": 1000,
   "rewards": [
@@ -71,20 +60,21 @@ Copy
     { "points_required": 500, "reward_type": "FREE_SHIPPING", "value": "100%" }
   ]
 }
+
+
 Logic:
+
 Query users.points_balance by shopify_customer_id.
 Fetch loyalty_config.config->'rewards' for the shop.
 Check Redis cache (points:customer:{shopify_customer_id}) first; fallback to PostgreSQL.
+
 Example:
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 async getCustomerPoints(customerId: string, shopId: string) {
   const cachedBalance = await redis.get(`points:customer:${customerId}`);
   if (cachedBalance) return { balance: cachedBalance, rewards: await this.getRewards(shopId) };
@@ -99,17 +89,17 @@ async getCustomerPoints(customerId: string, shopId: string) {
   await redis.set(`points:customer:${customerId}`, balance.points_balance, 'EX', 3600);
   return { balance: balance.points_balance, rewards: config.rewards };
 }
+
 2. POST /api/redeem
 Description: Redeems points for a reward and generates a Shopify discount code.
 Authentication: Shopify OAuth (customer session token).
+
 Request:
 http
-
 Collapse
-
 Wrap
-
 Copy
+
 POST /api/redeem
 Headers: Authorization: Bearer <shopify_token>
 Body:
@@ -118,34 +108,33 @@ Body:
   "reward_type": "DISCOUNT",
   "value": "10%"
 }
+
 Response:
 json
-
 Collapse
-
 Wrap
-
 Copy
+
 {
   "discount_code": "LOYALTY_abc123",
   "new_balance": 800
 }
+
 Logic:
+
 Validate points_balance >= points_required in users.
 Create a Shopify discount code via Admin API.
 Insert into points_transactions (points_spent: 200, action_type: REDEMPTION).
 Update users.points_balance -= 200.
 Update Redis cache.
+
 Example:
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 async redeemPoints(customerId: string, shopId: string, dto: RedeemDto) {
   const [balance] = await this.typeOrmRepository.query(
     'SELECT points_balance FROM users WHERE shopify_customer_id = $1',
@@ -167,17 +156,18 @@ async redeemPoints(customerId: string, shopId: string, dto: RedeemDto) {
   await redis.set(`points:customer:${customerId}`, balance.points_balance - dto.points_required, 'EX', 3600);
   return { discount_code: discount.code, new_balance: balance.points_balance - dto.points_required };
 }
+
 3. POST /api/settings
+
 Description: Updates merchant points program settings (e.g., points_per_dollar).
 Authentication: Shopify OAuth (merchant session token).
+
 Request:
 http
-
 Collapse
-
 Wrap
-
 Copy
+
 POST /api/settings
 Headers: Authorization: Bearer <shopify_token>
 Body:
@@ -185,30 +175,29 @@ Body:
   "points_per_dollar": 10,
   "program_status": "active"
 }
+
 Response:
 json
-
 Collapse
-
 Wrap
-
 Copy
+
 {
   "message": "Settings updated"
 }
+
 Logic:
+
 Update loyalty_config.config using JSONB.
 Cache updated config in Redis.
+
 Example:
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 async updateSettings(shopId: string, dto: SettingsDto) {
   await this.typeOrmRepository.query(
     'UPDATE loyalty_config SET config = jsonb_set(jsonb_set(config, \'{points_per_dollar}\', to_jsonb($1::int)), \'{program_status}\', to_jsonb($2)) WHERE shop_id = $3',
@@ -217,17 +206,18 @@ async updateSettings(shopId: string, dto: SettingsDto) {
   await redis.set(`config:shop:${shopId}`, JSON.stringify(dto), 'EX', 3600);
   return { message: 'Settings updated' };
 }
+
 4. POST /api/rewards
+
 Description: Adds a new reward to the merchant’s configuration.
 Authentication: Shopify OAuth (merchant session token).
+
 Request:
 http
-
 Collapse
-
 Wrap
-
 Copy
+
 POST /api/rewards
 Headers: Authorization: Bearer <shopify_token>
 Body:
@@ -236,30 +226,30 @@ Body:
   "reward_type": "DISCOUNT",
   "value": "10%"
 }
+
 Response:
 json
-
 Collapse
-
 Wrap
-
 Copy
+
 {
   "message": "Reward added"
 }
+
 Logic:
+
 Append reward to loyalty_config.config->'rewards'.
 Update Redis cache.
+
 Example:
+
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 async addReward(shopId: string, dto: RewardDto) {
   await this.typeOrmRepository.query(
     'UPDATE loyalty_config SET config = jsonb_set(config, \'{rewards}\', config->\'rewards\' || $1::jsonb) WHERE shop_id = $2',
@@ -268,41 +258,44 @@ async addReward(shopId: string, dto: RewardDto) {
   await redis.del(`config:shop:${shopId}`); // Invalidate cache
   return { message: 'Reward added' };
 }
+
 Webhooks
+
 1. orders/create
+
 Description: Triggered when a customer completes a purchase, used to award points (e.g., 1000 points for $100).
 Endpoint: POST /webhooks/orders/create
+
 Payload (Shopify):
 json
-
 Collapse
-
 Wrap
-
 Copy
+
 {
   "id": "987654321",
   "total_price": "100.00",
   "customer": { "id": "123456789" },
   "shop_id": "store.myshopify.com"
 }
+
 Logic:
+
 Validate HMAC signature using @shopify/shopify-api.
 Fetch points_per_dollar from loyalty_config.config.
 Calculate points: total_price * points_per_dollar.
 Insert into points_transactions and update users.points_balance.
 Cache updated balance in Redis.
+
 Check for reward eligibility and send notifications (Twilio/SendGrid).
+
 Example:
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 @Post('orders/create')
 async handleOrderCreate(@Body() payload: any, @Headers('x-shopify-hmac-sha256') hmac: string) {
   if (!this.shopifyService.verifyWebhook(payload, hmac)) throw new UnauthorizedException('Invalid webhook');
@@ -321,21 +314,23 @@ async handleOrderCreate(@Body() payload: any, @Headers('x-shopify-hmac-sha256') 
   await redis.set(`points:customer:${customer.id}`, points, 'EX', 3600);
   await this.notifyCustomer(customer.id, shop_id, points);
 }
+
 Notifications
+
 Twilio SMS:
+
 Trigger: After points are Hawkins (points_balance >= reward threshold).
+
 Logic:
 Fetch users.phone and send SMS via Twilio.
+
 Example:
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 async notifyCustomer(customerId: string, shopId: string, points: number) {
   const [user] = await this.typeOrmRepository.query(
     'SELECT points_balance, phone FROM users WHERE shopify_customer_id = $1',
@@ -354,38 +349,40 @@ async notifyCustomer(customerId: string, shopId: string, points: number) {
     });
   }
 }
+
 SendGrid Email:
+
 Similar logic, using users.email and SendGrid API.
 Queue notifications using Bull (Redis-based) for scalability.
 Shopify Functions (Rust/Wasm)
 Function: calculate_points
 Purpose: Compute points at checkout for performance (optional for MVP).
+
 Logic:
 rust
-
 Collapse
-
 Wrap
-
 Copy
+
 #[shopify_function]
 fn calculate_points(input: Input) -> Result<Output, Error> {
     let points = input.order.total_price * input.shop.config.points_per_dollar;
     Ok(Output { points })
 }
+
 Integration: Deploy via Shopify CLI, call from NestJS to log points.
+
 Error Handling
+
 Shopify API Rate Limits:
+
 Implement exponential backoff:
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 async retryShopifyCall(fn: () => Promise<any>, retries = 3) {
   try {
     return await fn();
@@ -397,45 +394,45 @@ async retryShopifyCall(fn: () => Promise<any>, retries = 3) {
     throw error;
   }
 }
+
 Webhook Validation: Use Shopify’s HMAC verification.
 Database Errors: Use TypeORM transactions for atomic updates:
+
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 await this.typeOrmRepository.transaction(async (manager) => {
   await manager.query('UPDATE users ...');
   await manager.query('INSERT INTO points_transactions ...');
 });
+
 Analytics
+
 PostHog Events:
+
 points_earned: { customer_id, points, shop_id, order_id }.
 points_redeemed: { customer_id, points_spent, reward_type, shop_id }.
+
 Example:
 javascript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 posthog.capture('points_earned', { customer_id, points, shop_id, order_id });
+
 Deployment
+
 Docker Compose:
 yaml
-
 Collapse
-
 Wrap
-
 Copy
+
 services:
   backend:
     image: herethere-backend
@@ -452,97 +449,104 @@ services:
     image: postgres:13
   redis:
     image: redis:6
+
 Nginx: Proxy requests to backend/frontend, serve static assets.
 Railway: Host PostgreSQL/Redis on free tier for production.
+
 Dependencies
+
 Backend:
 bash
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 npm install @nestjs/core @nestjs/typeorm typeorm pg ioredis @shopify/shopify-api twilio @sendgrid/mail bull @hapi/joi uuid
+
 Frontend:
 bash
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 npm install react@18.3.1 react-dom@18.3.1 @shopify/app-bridge-react @shopify/polaris tailwindcss axios posthog-js
+
 Security
 Validate Shopify OAuth tokens and webhook HMAC.
 Store sensitive data (e.g., Twilio/SendGrid keys) in .env using @nestjs/config.
 Use HTTPS (Nginx) for API requests.
+
 Scalability
 Redis caching for points_balance and loyalty_config.
 Bull queue for asynchronous notifications.
+
 PostgreSQL indexes:
 sql
-
 Collapse
-
 Wrap
-
 Copy
+
 CREATE INDEX idx_points_transactions_customer_id ON points_transactions(shopify_customer_id);
 CREATE INDEX idx_loyalty_config ON loyalty_config USING GIN (config);
+
 Show in sidebar
+
 How the Specs Support Points Program Logic
 Earning Points ($100 → 1000 points):
 orders/create webhook triggers handleOrderCreate, fetches points_per_dollar from loyalty_config, calculates points, updates users.points_balance and points_transactions, caches in Redis, and sends notifications.
+
 Redeeming Points (200 points for 10% discount):
 POST /api/redeem validates points_balance, creates a Shopify discount code, deducts points, logs transaction, and notifies the customer.
+
 Notifications:
 notifyCustomer checks reward eligibility and sends SMS/email using users.phone/email.
+
 Merchant Configuration:
 POST /api/settings and POST /api/rewards update loyalty_config.config with JSONB.
+
 How to Use the Specs
+
 Development:
 Use the API endpoints and webhook logic to implement PointsService, RewardsService, and WebhookController in NestJS.
 Copy the TypeORM entities and migrations from the ERD to set up PostgreSQL.
+
 Store the specs in docs/specs.md or generate Swagger docs:
 bash
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 npm install @nestjs/swagger
+
 Demo:
 Share with Shopify reviewers to demonstrate technical compliance.
 Use with beta merchants to explain backend logic (simplified version).
+
 Testing:
 Write Jest tests for PointsService and RewardsService:
+
 typescript
-
 Collapse
-
 Wrap
-
 Run
-
 Copy
+
 describe('PointsService', () => {
   it('should award points for order', async () => {
     const points = await pointsService.awardPoints('123', 'store.myshopify.com', 100);
     expect(points).toBe(1000);
   });
 });
+
 Additional Notes
+
 MVP Focus: Prioritize orders/create webhook, /api/customer/points, and /api/redeem for the points program.
 Extensibility: Add endpoints for referrals (e.g., POST /api/referral) or analytics (e.g., GET /api/analytics).
 Performance: Use Redis for caching, Bull for queues, and Rust/Wasm for high-traffic scenarios.
+
 If You Want More
 If you need additional details or modifications, please specify:
 
@@ -550,4 +554,3 @@ Additional Endpoints: E.g., for SMS referrals or detailed analytics.
 More Code: E.g., full PointsService implementation or frontend React components.
 Specific Focus: E.g., Shopify Functions in Rust or PostHog setup.
 Format: Swagger/OpenAPI YAML or more detailed Markdown.
-I can also refine the flow diagram, wireframes, or ERD to align with these specs. Let me know your next priority!
