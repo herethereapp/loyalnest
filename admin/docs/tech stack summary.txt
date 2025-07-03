@@ -1,71 +1,117 @@
-Below is the updated tech stack for your Herethere Loyalty App, reflecting your preference for NestJS from the start, Vite + React for the frontend, and deployment on your own VPS instead of Railway. The stack is optimized for a solo beginner developer using AI-driven development to avoid project failure, as outlined in your Project Plan and Roadmap.
+```
+Herethere Loyalty App Tech Stack Summary
 
 Backend
+- Framework: NestJS (TypeScript)
+  - Why: Modular structure (controllers, services, modules) organizes APIs (/api/points, /api/referral, /api/analytics, /admin/*) and admin module logic. TypeScript ensures type safety for points transactions, RFM scores (customers.rfm_score JSONB), and GDPR handling, reducing bugs for a solo developer. Scales for Phase 2 (VIP tiers, RFM nudges) and Phase 3 (gamification, bonus campaigns) without refactoring. Integrates with @shopify/shopify-app-express for Shopify OAuth and webhooks (orders/create, customers/data_request).
+  - Use Case: APIs for points earning (purchases, signups, birthdays), referrals (Twilio/SendGrid), RFM analytics (US-MD10), VIP tiers (US-MD8), gamification (US-CW9), and admin module (US-AM1–AM12). Handles Shopify OAuth, GDPR webhooks, and async notifications via Bull queues.
+  - Security: Uses pgcrypto for encrypting customers.email, merchants.api_token. Implements RBAC for admin module (admin_users.metadata).
+  - AI Assistance: Generates NestJS controllers, services, TypeORM queries, and Jest tests (e.g., "Write a NestJS controller for points redemption"). Explains TypeScript decorators and dependency injection.
 
-	• Framework: NestJS (TypeScript) 
-		○ Why: NestJS’s modular structure (controllers, services, modules) organizes APIs (/api/points, /api/referral, /api/analytics, /admin/*) and admin module logic for a medium-sized app. TypeScript ensures type safety for critical features like RFM scores (customers.rfm_score) and points transactions, reducing bugs. It supports scalability for Phase 2 (RFM tiers, Klaviyo integrations) without refactoring, aligning with your decision to use NestJS from the start. Integrates with @shopify/shopify-app-express for Shopify OAuth and webhooks.
-		○ Use Case: APIs for points (signup, birthday), SMS referrals (Twilio), basic RFM analytics (static thresholds), and admin module (/admin/merchants). Handles Shopify integrations (OAuth, orders/create webhook) and Twilio SMS.
-		○ AI Assistance: I’ll generate NestJS controllers, services, and Jest tests (e.g., “Write a NestJS controller for SMS referrals”) and explain concepts (e.g., decorators) to ease your learning curve.
-	• Additional Backend: Rust/Wasm 
-		○ Why: Used for Shopify Functions (discounts, basic RFM score updates, e.g., rfm_score.r on orders/create), ensuring high performance for real-time logic.
-		○ Use Case: Implements amount/percentage discounts (e.g., 500 points for $5 off) and updates RFM scores in customers.rfm_score (JSONB).
-		○ AI Assistance: I’ll provide Rust code and cargo test cases (e.g., “Write a Rust Shopify Function for discounts”) and guide Shopify CLI setup.
-	• Database: PostgreSQL (JSONB) 
-		○ Why: Consolidates data storage for TVP, using JSONB for flexible RFM configs (rfm_score, rfm_thresholds) and tables (merchants, customers, points_transactions, referrals, etc.), as per herethere_full_schema.sql. Indexes on customers(email, merchant_id, rfm_score), points_transactions(customer_id), and referrals(merchant_id) ensure performance for 5,000+ customers.
-		○ Use Case: Stores customer data, points transactions, referral codes, and RFM segments. JSONB simplifies static RFM thresholds (e.g., Recency 5: <30 days).
-		○ AI Assistance: I’ll optimize indexes (e.g., “Suggest PostgreSQL indexes for RFM queries”) and generate schema scripts.
-	• Caching: Redis 
-		○ Why: Caches points balances, referral codes, and RFM scores/segments to support scalability (5,000+ customers).
-		○ Use Case: Reduces database load for frequent queries (e.g., RFM segment counts in AnalyticsPage.tsx).
-		○ AI Assistance: I’ll provide Redis integration code (e.g., “Add Redis caching to NestJS for points”).
+- Additional Backend: Rust/Wasm
+  - Why: Powers Shopify Functions for high-performance real-time logic, minimizing latency for Plus merchants (1,000 orders/hour).
+  - Use Case: Implements discounts (e.g., 500 points for $5 off), RFM score updates (customers.rfm_score JSONB), VIP multipliers, and campaign discounts (US-BI4).
+  - AI Assistance: Provides Rust code, cargo test cases, and Shopify CLI setup guides (e.g., "Write a Rust Shopify Function for RFM updates").
+
+- Database: PostgreSQL (JSONB, pgcrypto)
+  - Why: Stores all data in tables (merchants, customers, points_transactions, referrals, rewards, program_settings, gdpr_requests, gamification_achievements, nudge_events) with JSONB for flexible configs (program_settings.config, email_templates.body). Indexes (e.g., customers(email, merchant_id, rfm_score), points_transactions(customer_id)) and partitioning (points_transactions, api_logs) ensure performance for 50,000+ customers. pgcrypto encrypts sensitive fields.
+  - Use Case: Manages customer data, points transactions, referral codes, RFM segments, GDPR requests, and nudge events. Supports multilingual content (email_templates.body, nudges.title JSONB).
+  - AI Assistance: Optimizes indexes, generates schema scripts, and provides TypeORM queries (e.g., "Optimize PostgreSQL query for RFM segments").
+
+- Caching: Redis
+  - Why: Caches points balances, referral codes, RFM scores, and program settings to reduce database load for high-traffic stores.
+  - Use Case: Speeds up frequent queries (e.g., points balance in CustomerWidget.tsx, RFM segments in AnalyticsPage.tsx). Invalidates cache on updates (e.g., PUT /settings, POST /rewards).
+  - AI Assistance: Provides Redis integration code for NestJS (e.g., "Cache points balance in Redis").
+
+- Queue: Bull (Redis-based)
+  - Why: Handles async tasks (Twilio/SendGrid notifications, RFM updates) to ensure scalability and reliability.
+  - Use Case: Queues SMS/email notifications (US-CW4, US-BI2) and RFM score calculations (US-BI5).
+  - AI Assistance: Generates Bull queue setup and error handling (e.g., "Add Bull queue for Twilio SMS").
 
 Frontend
+- Framework: Vite + React (TypeScript)
+  - Why: Vite’s fast builds and HMR accelerate development of Polaris-compliant components (WelcomePage.tsx, PointsPage.tsx, AnalyticsPage.tsx, CustomerWidget.tsx). TypeScript ensures type-safe props (e.g., interface Customer { points: number; rfm_score: RFMScore; }). Supports Shopify App Bridge, Polaris, and Tailwind CSS for compliance and responsive design.
+  - Use Case: Builds Merchant Dashboard (points, referrals, RFM charts), Customer Widget (points balance, redemption, referrals, nudges), and Admin Module (merchant management, GDPR requests). Supports Phase 3 features (gamification, multilingual via Accept-Language headers).
+  - Accessibility: Uses ARIA labels (e.g., aria-label="Redeem 500 points") and keyboard navigation for screen reader support.
+  - AI Assistance: Generates JSX components, Tailwind styles, and Cypress tests (e.g., "Write a Polaris-compliant React component for RFM chart").
 
-	• Framework: Vite + React (TypeScript) 
-		○ Why: Vite’s fast builds and hot module replacement (HMR) accelerate development of Polaris-compliant components (WelcomePage.tsx, PointsPage.tsx, AnalyticsPage.tsx, CustomerWidget.tsx). TypeScript ensures consistency with the backend and type-safe props (e.g., interface Customer { points: number; }). Integrates with Shopify’s Polaris, App Bridge, and Tailwind CSS for Shopify compliance.
-		○ Use Case: Builds merchant dashboard (points, referrals, RFM analytics with Chart.js), customer widget (points balance, SMS referral popup), and admin module (merchant management, RFM segments). Supports mobile-friendly design and Phase 3 features (gamification, multilingual).
-		○ AI Assistance: I’ll generate JSX components, Tailwind styles, and Cypress tests (e.g., “Write a Polaris-compliant React component for RFM chart”).
-	• UI Framework: Shopify Polaris 
-		○ Why: Ensures Shopify App Store compliance with a consistent, merchant-friendly UI for dashboard and admin module.
-		○ Use Case: Used for all frontend pages and customer widget.
-	• Styling: Tailwind CSS 
-		○ Why: Provides utility-first styling for rapid UI development, complementing Polaris.
-		○ Use Case: Styles dashboard, widget, and admin module (e.g., RFM chart layout).
-	• Shopify Integration: App Bridge 
-		○ Why: Embeds React components in Shopify’s admin and storefront.
-		○ Use Case: Integrates dashboard with Shopify admin and widget with storefront themes.
-	• Visualization: Chart.js 
-		○ Why: Renders RFM segment bar charts in AnalyticsPage.tsx and admin module.
-		○ Use Case: Displays RFM segments (e.g., “Best Customers: 10%”) and Phase 2 analytics.
+- UI Framework: Shopify Polaris
+  - Why: Ensures Shopify App Store compliance with consistent, merchant-friendly UI.
+  - Use Case: Implements Merchant Dashboard (Tabs, FormLayout, Button) and Admin Module. Used minimally in Customer Widget for consistency.
+  - AI Assistance: Provides Polaris component examples (e.g., "Use Polaris Tabs for Points Program").
+
+- Styling: Tailwind CSS
+  - Why: Enables rapid, utility-first styling for responsive design (sm:, md: breakpoints).
+  - Use Case: Styles Customer Widget (mobile-friendly), Merchant Dashboard, and Admin Module. Complements Polaris for custom layouts (e.g., RFM chart).
+  - AI Assistance: Generates Tailwind classes (e.g., "Style a responsive points balance display").
+
+- Shopify Integration: App Bridge
+  - Why: Embeds React components securely in Shopify admin and storefront.
+  - Use Case: Authenticates Merchant Dashboard (US-MD1) and Customer Widget (US-CW1) with Shopify OAuth.
+  - AI Assistance: Provides App Bridge setup code (e.g., "Integrate App Bridge for Customer Widget").
+
+- Visualization: Chart.js
+  - Why: Renders RFM segment bar charts and analytics visualizations.
+  - Use Case: Displays RFM segments (US-MD5, US-AM1), redemption rates, and loyalty revenue in AnalyticsPage.tsx and Admin Module.
+  - AI Assistance: Generates Chart.js configs (e.g., "Create a bar chart for RFM segments").
 
 Deployment and Testing
+- Deployment: VPS (Ubuntu with Docker)
+  - Why: Provides full control over infrastructure, replacing Railway. Docker Compose orchestrates NestJS, PostgreSQL, Redis, and Bull for consistent environments. Nginx serves frontend assets with Let’s Encrypt SSL for security.
+  - Use Case: Hosts backend APIs, frontend assets, and databases. Scales to 50,000+ customers with Redis caching, Bull queues, and PostgreSQL partitioning.
+  - Monitoring: Uses Prometheus and Grafana for performance tracking (e.g., API latency, queue status).
+  - AI Assistance: Provides Docker Compose files, Nginx configs, and Prometheus/Grafana setup (e.g., "Dockerize NestJS and PostgreSQL for VPS").
 
-	• Deployment: VPS (e.g., Ubuntu with Docker) 
-		○ Why: Replaces Railway for hosting NestJS, PostgreSQL, and Redis, giving you full control over infrastructure. Docker simplifies deployment of backend (NestJS), databases (PostgreSQL, Redis), and frontend (Vite + React) with consistent environments. Supports CI/CD via GitHub Actions, as per your plan.
-		○ Use Case: Hosts TVP backend APIs, frontend assets, and databases. Scales to 5,000+ merchants with Redis caching and PostgreSQL indexes.
-		○ AI Assistance: I’ll provide Docker setup guides (e.g., “Dockerize NestJS and PostgreSQL for VPS”) and Nginx configs for serving the frontend.
-	• CI/CD: GitHub Actions 
-		○ Why: Automates testing and deployment to your VPS, ensuring code quality.
-		○ Use Case: Runs Jest/Cypress tests and deploys to VPS on git push.
-	• Testing: Jest, Cypress, cargo test 
-		○ Why: Jest for unit/integration tests (NestJS APIs, RFM logic), Cypress for end-to-end tests (dashboard, widget, RFM UI), and cargo test for Rust Functions.
-		○ Use Case: Tests APIs, frontend components, Shopify/Twilio integrations, and Rust logic. Load tests validate 5,000 customers.
-		○ AI Assistance: I’ll generate test cases (e.g., “Write Jest tests for RFM API”).
+- CI/CD: GitHub Actions
+  - Why: Automates testing, building, and deployment to VPS, ensuring code quality.
+  - Use Case: Runs Jest, Cypress, and cargo tests on push; deploys to VPS.
+  - AI Assistance: Generates GitHub Actions workflows (e.g., "Create a CI/CD pipeline for NestJS").
+
+- Testing: Jest, Cypress, cargo test, k6
+  - Why: Jest tests NestJS APIs and TypeORM transactions (e.g., points redemption consistency). Cypress tests end-to-end UI flows (dashboard, widget). cargo test validates Rust Functions. k6 ensures scalability (1,000 orders/hour). axe-core tests accessibility.
+  - Use Case: Validates Shopify/Twilio/SendGrid integrations, RFM logic, GDPR handling, and UI interactions.
+  - AI Assistance: Generates test cases (e.g., "Write Jest test for points API", "Write k6 script for load testing").
 
 Integrations
+- Shopify: @shopify/shopify-app-express (backend), Shopify CLI (Rust Functions)
+  - Why: Handles OAuth, webhooks (orders/create, orders/cancelled, customers/data_request, customers/redact), and POS points earning (10 points/$).
+  - Use Case: Authenticates merchants, syncs orders, processes GDPR requests, and enables POS integration (US-BI1, US-AM6).
+  - AI Assistance: Provides webhook setup and OAuth code (e.g., "Handle Shopify orders/create webhook").
 
-	• Shopify: @shopify/shopify-app-express (backend), Shopify CLI (Rust Functions) 
-		○ Why: Handles OAuth, webhooks (orders/create), and POS points earning (1 point/$).
-		○ Use Case: Authenticates merchants, syncs orders, and enables POS integration.
-	• Twilio: 
-		○ Why: Powers SMS referrals in customer widget (e.g., 10% off).
-		○ Use Case: Sends referral codes, tracked in referrals table.
+- Twilio:
+  - Why: Powers SMS referrals and notifications.
+  - Use Case: Sends referral codes and points updates (US-CW4, US-BI2) via Bull queues.
+  - AI Assistance: Generates Twilio integration code (e.g., "Send SMS referral via NestJS").
+
+- SendGrid:
+  - Why: Handles email notifications for referrals, points updates, and GDPR requests.
+  - Use Case: Sends multilingual emails (email_templates.body JSONB, US-CW4, US-AM6) via Bull queues.
+  - AI Assistance: Provides SendGrid integration code (e.g., "Send email via SendGrid in NestJS").
+
+- PostHog:
+  - Why: Tracks user interactions and analytics events for monitoring engagement.
+  - Use Case: Logs events like points_earned, referral_clicked, analytics_viewed (US-MD5, US-AM1).
+  - AI Assistance: Generates PostHog event tracking code (e.g., "Track redemption click in Customer Widget").
+
+- Shopify Flow:
+  - Why: Automates workflows for nudges and GDPR processing.
+  - Use Case: Triggers RFM nudges (US-CW8) and GDPR data exports (US-AM6).
+  - AI Assistance: Provides Shopify Flow scripts (e.g., "Create a Flow script for RFM nudges").
+
+- Phase 2–3 Integrations: Klaviyo, Mailchimp, Yotpo, Square, Lightspeed, Gorgias, Postscript
+  - Why: Expands marketing, POS, and support capabilities for Plus merchants.
+  - Use Case: Klaviyo/Mailchimp for email campaigns, Square/Lightspeed for POS, Gorgias for support tickets, Yotpo for reviews, Postscript for SMS (US-BI3, US-AM12).
+  - AI Assistance: Provides integration setup guides (e.g., "Integrate Klaviyo with NestJS").
 
 Development Tools
-
-	• AI Tools: GitHub Copilot, Cursor, Grok (me) 
-		○ Why: Generates code, tests, and schema optimizations, with manual review for Shopify compliance.
-		○ Use Case: Speeds up coding (e.g., NestJS APIs, React components) and learning (e.g., “Explain TypeScript interfaces”).
-	• Version Control: Git (GitHub) 
-		○ Why: Tracks changes, prevents loss, and supports CI/CD.
-		○ Use Case: Commits code (e.g., git commit -m "Add points API").
+- AI Tools: GitHub Copilot, Cursor, Grok
+  - Why: Accelerates coding, testing, and debugging for a solo developer. Ensures Shopify compliance through manual review.
+  - Use Case: Generates NestJS APIs, React components, SQL queries, and tests. Explains concepts (e.g., "Explain NestJS modules").
+- Version Control: Git (GitHub)
+  - Why: Tracks changes, enables collaboration, and supports CI/CD.
+  - Use Case: Commits code (e.g., git commit -m "Add RFM API") and manages branches for Phases 1–3.
+- IDE: VS Code
+  - Why: Supports TypeScript, React, Rust, and extensions (e.g., Prettier, ESLint, Mermaid).
+  - Use Case: Edits code, renders Mermaid diagrams, and runs Shopify CLI.
+  - AI Assistance: Provides VS Code setup guides (e.g., "Configure ESLint for NestJS").
+```

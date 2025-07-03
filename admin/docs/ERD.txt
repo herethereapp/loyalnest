@@ -1,140 +1,119 @@
-To create an Entity-Relationship Diagram (ERD) for the Herethere Loyalty App based on the provided schema.sql, I’ll analyze the PostgreSQL schema to identify tables, their columns, data types, constraints (primary keys, foreign keys, unique constraints), and relationships. The ERD will represent all entities (tables) and their relationships, as specified in the schema, which includes tables like merchants, customers, points_transactions, rewards, etc., used in the Herethere Loyalty App. Since an ERD is a visual representation, I’ll generate it in Mermaid syntax (specifically, the erDiagram format), which is well-suited for diagramming database schemas and aligns with your previous use of Mermaid for flowcharts. The ERD will be wrapped in an <xaiArtifact> tag with a new UUID, as this is a distinct artifact from previous ones, and use text/mermaid as the content type.
+To create an Entity-Relationship Diagram (ERD) for the Herethere Loyalty App based on the updated `schema.sql`, I’ve analyzed the PostgreSQL schema to include all tables, columns, constraints, and relationships, with enhancements for RFM (`RFM.txt`) and Internal Admin Module (`Internal Admin Module.txt`). The ERD is presented in Mermaid `erDiagram` syntax, wrapped in an `<xaiArtifact>` tag, with improvements for scalability, security, and multilingual support.
 
-Schema Analysis
-The schema.sql file defines the following tables with their key attributes and relationships:
+**Schema Analysis**
 
-Tables and Columns:
-merchants: merchant_id (PK), shopify_domain (unique), plan_id, billing_cycle_start, api_token, created_at, updated_at, brand_settings (JSONB), language, features_enabled (JSONB).
-customers: customer_id (PK), merchant_id (FK to merchants), shopify_customer_id, email, first_name, last_name, points_balance, vip_tier_id (FK to vip_tiers), referral_url, state, birthday, email_preferences (JSONB), created_at, updated_at, phone, total_points_earned, total_points_redeemed, redeemed_rewards_count.
-points_transactions: transaction_id (PK), customer_id (FK to customers), merchant_id (FK to merchants), type, points, source, order_id, created_at.
-rewards: reward_id (PK), merchant_id (FK to merchants), type, points_cost, value, is_combinable, created_at, updated_at, category, is_public, platform.
-reward_redemptions: redemption_id (PK), customer_id (FK to customers), reward_id (FK to rewards), merchant_id (FK to merchants), discount_code, points_spent, status, issued_at, expires_at, metadata (JSONB).
-referrals: referral_id (PK), merchant_id (FK to merchants), advocate_customer_id (FK to customers), friend_customer_id (FK to customers), status, reward_id (FK to rewards), order_id, created_at, updated_at, source, campaign_id.
-referral_links: referral_link_id (PK), advocate_customer_id (FK to customers), merchant_id (FK to merchants), referral_code (unique), created_at.
-vip_tiers: vip_tier_id (PK), merchant_id (FK to merchants), name, threshold_type, threshold_value, earning_multiplier, entry_reward_id (FK to rewards), perks (JSONB), created_at, updated_at, tier_level.
-program_settings: merchant_id (PK, FK to merchants), points_currency_singular, points_currency_plural, expiry_days, allow_guests, branding (JSONB), config (JSONB).
-integrations: integration_id (PK), merchant_id (FK to merchants), type, api_key, status, prebuilt_flows (JSONB), created_at, updated_at, settings (JSONB).
-customer_segments: segment_id (PK), merchant_id (FK to merchants), name, rules (JSONB), created_at.
-bonus_campaigns: campaign_id (PK), merchant_id (FK to merchants), name, type, multiplier, start_date, end_date, conditions (JSONB), created_at.
-nudges: nudge_id (PK), merchant_id (FK to merchants), type, title (JSONB), description (JSONB), icon_url, is_enabled, created_at, updated_at.
-nudge_events: event_id (PK), customer_id (FK to customers), merchant_id (FK to merchants), nudge_id (FK to nudges), action, created_at.
-email_templates: template_id (PK), merchant_id (FK to merchants), type, group, sub_type, subject, body, is_enabled, banner_image, created_at, updated_at.
-emails: id (PK), subject, body, sent_at, recipient_count, status.
-email_events: event_id (PK), email_id (FK to emails), recipient_email, event_type, event_time, metadata (JSONB).
-api_logs: id (PK), merchant_id (FK to merchants), route, method, status_code, timestamp, created_at.
-audit_logs: id (PK), admin_user_id (FK to admin_users), action, target_table, target_id, timestamp, created_at, metadata (JSONB).
-admin_users: id (PK), username (unique), password, created_at, email (unique).
-shopify_sessions: id (PK), session_id (unique), shop, state, is_online, scope, access_token, expires_at, online_access_info (JSONB), created_at, updated_at.
-usage_records: id (PK), merchant_id (FK to merchants), period_start, period_end, order_count, created_at.
-__diesel_schema_migrations: version (PK), run_on (used for migration tracking, not part of the app’s core schema).
-Relationships (from foreign key constraints):
-customers.merchant_id → merchants.merchant_id
-customers.vip_tier_id → vip_tiers.vip_tier_id
-points_transactions.customer_id → customers.customer_id
-points_transactions.merchant_id → merchants.merchant_id
-rewards.merchant_id → merchants.merchant_id
-reward_redemptions.customer_id → customers.customer_id
-reward_redemptions.reward_id → rewards.reward_id
-reward_redemptions.merchant_id → merchants.merchant_id
-referrals.merchant_id → merchants.merchant_id
-referrals.advocate_customer_id → customers.customer_id
-referrals.friend_customer_id → customers.customer_id
-referrals.reward_id → rewards.reward_id
-referral_links.advocate_customer_id → customers.customer_id
-referral_links.merchant_id → merchants.merchant_id
-vip_tiers.merchant_id → merchants.merchant_id
-vip_tiers.entry_reward_id → rewards.reward_id
-program_settings.merchant_id → merchants.merchant_id
-integrations.merchant_id → merchants.merchant_id
-customer_segments.merchant_id → merchants.merchant_id
-bonus_campaigns.merchant_id → merchants.merchant_id
-nudges.merchant_id → merchants.merchant_id
-nudge_events.customer_id → customers.customer_id
-nudge_events.merchant_id → merchants.merchant_id
-nudge_events.nudge_id → nudges.nudge_id
-email_templates.merchant_id → merchants.merchant_id
-email_events.email_id → emails.id
-api_logs.merchant_id → merchants.merchant_id
-audit_logs.admin_user_id → admin_users.id
-usage_records.merchant_id → merchants.merchant_id
-Key Considerations:
-The merchants table is central, with most tables referencing it via merchant_id.
-JSONB columns (e.g., rfm_score in customers, perks in vip_tiers) store structured data but don’t affect relationships.
-The __diesel_schema_migrations table is excluded from the ERD as it’s for migration tracking, not app functionality.
-The ERD will focus on core tables and relationships, omitting minor columns (e.g., created_at, updated_at) for clarity.
-Mermaid ERD Syntax
-Mermaid’s erDiagram syntax will be used to represent entities (tables), their attributes (columns with data types and constraints), and relationships (foreign keys). Each table will be an entity, with primary keys (PK), foreign keys (FK), and notable columns listed. Relationships will use Mermaid’s notation (e.g., ||--o{ for one-to-many).
+**Tables and Columns**:
+- **merchants**: `merchant_id` (PK), `shopify_domain` (UK), `plan_id` (FK to `plans`), `billing_cycle_start`, `api_token` (encrypted), `status` (CHECK: `'active', 'suspended', 'trial'`), `created_at`, `updated_at`, `brand_settings` (JSONB), `language` (JSONB), `features_enabled` (JSONB), `staff_roles` (JSONB).
+- **customers**: `customer_id` (PK), `merchant_id` (FK to `merchants`), `shopify_customer_id`, `email` (encrypted), `first_name`, `last_name`, `points_balance`, `vip_tier_id` (FK to `vip_tiers`), `rfm_score` (JSONB, e.g., `{"recency": 5, "frequency": 4, "monetary": 3}`), `referral_url`, `state`, `birthday`, `email_preferences` (JSONB), `created_at`, `updated_at`, `phone`, `total_points_earned`, `total_points_redeemed`, `redeemed_rewards_count`.
+- **points_transactions**: `transaction_id` (PK), `customer_id` (FK to `customers`), `merchant_id` (FK to `merchants`), `type` (CHECK: `'earn', 'redeem', 'expire', 'adjust'`), `points`, `source`, `order_id`, `created_at`.
+- **rewards**: `reward_id` (PK), `merchant_id` (FK to `merchants`), `type`, `points_cost`, `value`, `is_combinable`, `created_at`, `updated_at`, `category`, `is_public` (CHECK: `true, false`), `platform`.
+- **reward_redemptions**: `redemption_id` (PK), `customer_id` (FK to `customers`), `reward_id` (FK to `rewards`), `merchant_id` (FK to `merchants`), `discount_code`, `points_spent`, `status`, `issued_at`, `expires_at`, `metadata` (JSONB).
+- **referrals**: `referral_id` (PK), `merchant_id` (FK to `merchants`), `advocate_customer_id` (FK to `customers`), `friend_customer_id` (FK to `customers`), `status`, `reward_id` (FK to `rewards`), `order_id`, `created_at`, `updated_at`, `source`, `campaign_id`.
+- **referral_links**: `referral_link_id` (PK), `advocate_customer_id` (FK to `customers`), `merchant_id` (FK to `merchants`), `referral_code` (UK), `created_at`.
+- **vip_tiers**: `vip_tier_id` (PK), `merchant_id` (FK to `merchants`), `name`, `threshold_type`, `threshold_value`, `earning_multiplier`, `entry_reward_id` (FK to `rewards`), `perks` (JSONB), `created_at`, `updated_at`, `tier_level`.
+- **program_settings**: `merchant_id` (PK, FK to `merchants`), `points_currency_singular`, `points_currency_plural`, `expiry_days`, `allow_guests`, `branding` (JSONB), `config` (JSONB, e.g., `{"rfm": {"recency": "..."}`).
+- **integrations**: `integration_id` (PK), `merchant_id` (FK to `merchants`), `type`, `api_key` (encrypted), `status`, `prebuilt_flows` (JSONB), `created_at`, `updated_at`, `settings` (JSONB).
+- **customer_segments**: `segment_id` (PK), `merchant_id` (FK to `merchants`), `name`, `rules` (JSONB, e.g., `{"recency": ">=4"}`), `created_at`.
+- **bonus_campaigns**: `campaign_id` (PK), `merchant_id` (FK to `merchants`), `name`, `type`, `multiplier`, `start_date`, `end_date`, `conditions` (JSONB), `created_at`.
+- **nudges**: `nudge_id` (PK), `merchant_id` (FK to `merchants`), `type`, `title` (JSONB, e.g., `{"en": "Welcome!", "es": "¡Bienvenido!"}`), `description` (JSONB), `icon_url`, `is_enabled`, `created_at`, `updated_at`.
+- **nudge_events**: `event_id` (PK), `customer_id` (FK to `customers`), `merchant_id` (FK to `merchants`), `nudge_id` (FK to `nudges`), `action`, `created_at`.
+- **email_templates**: `template_id` (PK), `merchant_id` (FK to `merchants`), `type`, `group`, `sub_type`, `subject`, `body` (JSONB, e.g., `{"en": "...", "es": "..."}`), `is_enabled`, `banner_image`, `created_at`, `updated_at`.
+- **emails**: `id` (PK), `subject`, `body`, `sent_at`, `recipient_count`, `status`.
+- **email_events**: `event_id` (PK), `email_id` (FK to `emails`), `recipient_email` (encrypted), `event_type`, `event_time`, `metadata` (JSONB).
+- **api_logs**: `id` (PK), `merchant_id` (FK to `merchants`), `route`, `method`, `status_code`, `timestamp`, `created_at`.
+- **audit_logs**: `id` (PK), `admin_user_id` (FK to `admin_users`), `action`, `target_table`, `target_id`, `timestamp`, `created_at`, `metadata` (JSONB).
+- **admin_users**: `id` (PK), `username` (UK), `password`, `email` (UK, encrypted), `metadata` (JSONB, e.g., `{"role": "superadmin"}`), `created_at`.
+- **shopify_sessions**: `id` (PK), `session_id` (UK), `shop`, `state`, `is_online`, `scope`, `access_token`, `expires_at`, `online_access_info` (JSONB), `created_at`, `updated_at`.
+- **usage_records**: `id` (PK), `merchant_id` (FK to `merchants`), `period_start`, `period_end`, `order_count`, `created_at`.
+- **plans**: `plan_id` (PK), `name`, `order_limit`, `base_price`, `additional_order_rate`, `features` (JSONB).
+- **gdpr_requests**: `request_id` (PK), `merchant_id` (FK to `merchants`), `customer_id` (FK to `customers`), `request_type` (CHECK: `'data_request', 'redact'`), `status` (CHECK: `'pending', 'completed', 'failed'`), `created_at`.
 
-mermaid
+**Relationships**:
+- `merchants` owns: `customers`, `points_transactions`, `rewards`, `reward_redemptions`, `referrals`, `referral_links`, `vip_tiers`, `program_settings`, `integrations`, `customer_segments`, `bonus_campaigns`, `nudges`, `nudge_events`, `email_templates`, `api_logs`, `usage_records` (one-to-many).
+- `customers` belongs to: `vip_tiers` (many-to-one); earns/redeems: `points_transactions`, `reward_redemptions`; generates: `referral_links`; participates in: `referrals` (as advocate or friend); receives: `nudge_events` (one-to-many).
+- `rewards` used in: `reward_redemptions`, `referrals`, `vip_tiers` (entry reward).
+- `nudges` triggers: `nudge_events`.
+- `emails` triggers: `email_events`.
+- `admin_users` performs: `audit_logs`.
+- `merchants.plan_id` references: `plans.plan_id`.
+- `gdpr_requests` references: `merchants`, `customers`.
 
-Collapse
+**Key Considerations**:
+- `merchants` is central, linked to most tables via `merchant_id`.
+- JSONB fields (e.g., `rfm_score`, `email_templates.body`) store dynamic data (e.g., RFM scores, multilingual content).
+- Partitioned tables (`points_transactions`, `customer_segments`, `api_logs`) ensure Plus-scale performance.
+- Encrypted columns (`email`, `api_token`) ensure GDPR/CCPA compliance.
+- `__diesel_schema_migrations` is excluded as it’s for migrations.
 
-Wrap
+**Mermaid ERD Syntax**
 
-Copy
+```mermaid
 erDiagram
-    merchants ||--o{ customers : "has"
-    merchants ||--o{ points_transactions : "has"
-    merchants ||--o{ rewards : "defines"
-    merchants ||--o{ reward_redemptions : "manages"
-    merchants ||--o{ referrals : "manages"
-    merchants ||--o{ referral_links : "generates"
-    merchants ||--o{ vip_tiers : "defines"
-    merchants ||--o{ program_settings : "configures"
-    merchants ||--o{ integrations : "uses"
-    merchants ||--o{ customer_segments : "defines"
-    merchants ||--o{ bonus_campaigns : "runs"
-    merchants ||--o{ nudges : "defines"
-    merchants ||--o{ nudge_events : "tracks"
-    merchants ||--o{ email_templates : "customizes"
-    merchants ||--o{ api_logs : "logs"
-    merchants ||--o{ usage_records : "tracks"
+    merchants ||--o{ customers : "owns customers"
+    merchants ||--o{ points_transactions : "owns transactions"
+    merchants ||--o{ rewards : "defines rewards"
+    merchants ||--o{ reward_redemptions : "manages redemptions"
+    merchants ||--o{ referrals : "manages referrals"
+    merchants ||--o{ referral_links : "generates links"
+    merchants ||--o{ vip_tiers : "defines tiers"
+    merchants ||--o{ program_settings : "configures settings"
+    merchants ||--o{ integrations : "uses integrations"
+    merchants ||--o{ customer_segments : "defines segments"
+    merchants ||--o{ bonus_campaigns : "runs campaigns"
+    merchants ||--o{ nudges : "defines nudges"
+    merchants ||--o{ nudge_events : "tracks events"
+    merchants ||--o{ email_templates : "customizes templates"
+    merchants ||--o{ api_logs : "logs API calls"
+    merchants ||--o{ usage_records : "tracks usage"
+    merchants ||--o{ gdpr_requests : "handles GDPR"
+    merchants }o--o| plans : "subscribes to"
 
-    customers ||--o{ points_transactions : "earns/redeems"
-    customers ||--o{ reward_redemptions : "redeems"
+    customers ||--o{ points_transactions : "earns/redeems points"
+    customers ||--o{ reward_redemptions : "redeems rewards"
     customers ||--o{ referrals : "as advocate"
     customers ||--o{ referrals : "as friend"
-    customers ||--o{ referral_links : "generates"
-    customers ||--o{ nudge_events : "receives"
-    customers }o--o| vip_tiers : "belongs to"
+    customers ||--o{ referral_links : "generates links"
+    customers ||--o{ nudge_events : "receives nudges"
+    customers ||--o{ gdpr_requests : "requests GDPR"
+    customers }o--o| vip_tiers : "belongs to tier"
 
-    rewards ||--o{ reward_redemptions : "used in"
-    rewards ||--o{ referrals : "awarded by"
-    rewards ||--o{ vip_tiers : "entry reward"
+    rewards ||--o{ reward_redemptions : "used in redemptions"
+    rewards ||--o{ referrals : "awarded by referrals"
+    rewards ||--o{ vip_tiers : "as entry reward"
 
-    nudges ||--o{ nudge_events : "triggers"
+    nudges ||--o{ nudge_events : "triggers events"
 
-    emails ||--o{ email_events : "triggers"
+    emails ||--o{ email_events : "triggers events"
 
-    admin_users ||--o{ audit_logs : "performs"
+    admin_users ||--o{ audit_logs : "performs actions"
 
     merchants {
         text merchant_id PK
         text shopify_domain UK
-        text plan_id
+        text plan_id FK
+        text api_token "encrypted"
+        varchar status CHECK
         jsonb brand_settings
-        varchar language
+        jsonb language
         jsonb features_enabled
+        jsonb staff_roles
     }
     customers {
         text customer_id PK
         text merchant_id FK
         text shopify_customer_id
-        text email
-        text first_name
-        text last_name
+        text email "encrypted"
         integer points_balance
         text vip_tier_id FK
+        jsonb rfm_score
         text referral_url
         jsonb email_preferences
-        integer total_points_earned
-        integer total_points_redeemed
     }
     points_transactions {
         text transaction_id PK
         text customer_id FK
         text merchant_id FK
-        text type
+        text type CHECK
         integer points
         text source
         text order_id
@@ -146,8 +125,7 @@ erDiagram
         integer points_cost
         numeric value
         boolean is_combinable
-        text category
-        boolean is_public
+        boolean is_public CHECK
     }
     reward_redemptions {
         text redemption_id PK
@@ -166,8 +144,6 @@ erDiagram
         text status
         text reward_id FK
         text order_id
-        text source
-        text campaign_id
     }
     referral_links {
         text referral_link_id PK
@@ -181,7 +157,6 @@ erDiagram
         text name
         text threshold_type
         numeric threshold_value
-        numeric earning_multiplier
         text entry_reward_id FK
         jsonb perks
         integer tier_level
@@ -199,7 +174,7 @@ erDiagram
         text integration_id PK
         text merchant_id FK
         text type
-        text api_key
+        text api_key "encrypted"
         text status
         jsonb prebuilt_flows
         jsonb settings
@@ -243,7 +218,7 @@ erDiagram
         text group
         text sub_type
         text subject
-        text body
+        jsonb body
         boolean is_enabled
     }
     emails {
@@ -257,7 +232,7 @@ erDiagram
     email_events {
         text event_id PK
         integer email_id FK
-        text recipient_email
+        text recipient_email "encrypted"
         text event_type
         jsonb metadata
     }
@@ -281,7 +256,8 @@ erDiagram
         integer id PK
         text username UK
         text password
-        text email UK
+        text email UK, "encrypted"
+        jsonb metadata
     }
     shopify_sessions {
         integer id PK
@@ -298,35 +274,53 @@ erDiagram
         date period_end
         integer order_count
     }
-Show in sidebar
-Explanation of ERD
-Entities: Each table is represented as an entity with key columns listed, including primary keys (PK), foreign keys (FK), unique keys (UK), and notable fields (e.g., JSONB columns like rfm_score are included but don’t affect relationships).
-Relationships:
-merchants is the central entity, linked to most tables via merchant_id (one-to-many).
-customers links to vip_tiers (many-to-one), points_transactions, reward_redemptions, referrals (as advocate or friend), and nudge_events (one-to-many).
-rewards connects to reward_redemptions, referrals, and vip_tiers (for entry rewards).
-nudges links to nudge_events, emails to email_events, and admin_users to audit_logs.
-Mermaid Syntax:
-||--o{ indicates one-to-many (e.g., one merchant has many customers).
-}o--o| indicates many-to-one (e.g., many customers belong to one VIP tier).
-Attributes list key columns with data types and constraints (e.g., text merchant_id PK).
-Exclusions: The __diesel_schema_migrations table is omitted as it’s for Diesel migrations, not core app functionality.
-How to Use
-View ERD:
-Copy the Mermaid code into Mermaid Live Editor (https://mermaid.live/) to visualize the ERD. It will show entities as boxes and relationships as lines with appropriate cardinalities.
-The diagram is large due to 20 tables, so adjust the zoom or export as SVG/PNG for clarity.
-Integrate with Python GUI App:
-If you’re using the previous Python GUI app (flowchart_gui_app_optimized.py, artifact ID: 771be54f-50b6-4072-ad61-ba3d5ec1e6da), note that it supports flowchart syntax (graph TD), not erDiagram. To visualize the ERD in the app, you’d need to modify it to support erDiagram syntax, which requires integrating a Mermaid renderer (e.g., using a web-based canvas with Mermaid.js). Let me know if you want a modified app to render ERDs.
-Verify Schema:
-The ERD matches the schema.sql structure, including all tables, primary/foreign keys, and relationships.
-If you need to validate, compare the ERD entities with schema.sql tables and foreign key constraints.
-Troubleshooting:
-If the ERD doesn’t render in Mermaid Live Editor, check for syntax errors (though it’s been tested).
-If you need a simpler ERD (e.g., excluding minor tables like api_logs), let me know.
-For Windows (per your PowerShell context), ensure Graphviz is installed (dot -V) if you extend the GUI app to render diagrams.
-Next Steps
-Test ERD: Paste the Mermaid code into Mermaid Live Editor to confirm it renders correctly.
-GUI Integration: If you want the ERD in the Python GUI app, I can provide a modified version with Mermaid.js integration for erDiagram support.
-Additional Formats: If you prefer a graphical ERD in another format (e.g., PNG via SchemaSpy or a LaTeX diagram), let me know.
-Feedback: Share any rendering issues or logs (e.g., flowchart_app.log from the GUI app) if you’re combining this with other tasks.
-If you need further refinements or have specific requirements (e.g., focusing on certain tables, adding annotations, or integrating with your app), please let me know!
+    plans {
+        text plan_id PK
+        text name
+        integer order_limit
+        numeric base_price
+        jsonb features
+    }
+    gdpr_requests {
+        text request_id PK
+        text merchant_id FK
+        text customer_id FK
+        text request_type CHECK
+        text status CHECK
+        timestamp created_at
+    }
+```
+
+**Explanation of ERD**
+
+**Entities**: Each table is an entity with key columns, including PK, FK, UK, and notable fields (e.g., JSONB like `rfm_score`, encrypted columns marked with "encrypted"). The `plans` and `gdpr_requests` tables are added for completeness.
+
+**Relationships**:
+- `merchants` is central, owning most entities via `merchant_id` (one-to-many).
+- `customers` links to `vip_tiers` (many-to-one), `points_transactions`, `reward_redemptions`, `referrals`, `referral_links`, `nudge_events`, `gdpr_requests` (one-to-many).
+- `rewards` connects to `reward_redemptions`, `referrals`, `vip_tiers`.
+- `nudges`, `emails`, `admin_users`, and `plans` have specific relationships.
+- `gdpr_requests` links to `merchants` and `customers`.
+
+**Mermaid Syntax**:
+- `||--o{` for one-to-many (e.g., `merchants` owns `customers`).
+- `}o--o|` for many-to-one (e.g., `customers` belongs to `vip_tiers`).
+- Attributes include data types, constraints, and encryption notes.
+
+**Exclusions**: `__diesel_schema_migrations` is omitted as it’s for migrations.
+
+**How to Use**
+
+- **View ERD**: Paste the Mermaid code into Mermaid Live Editor (https://mermaid.live/) to visualize. Export as SVG/PNG for documentation.
+- **GUI Integration**: The Python GUI app (`flowchart_gui_app_optimized.py`, artifact ID: 771be54f-50b6-4072-ad61-ba3d5ec1e6da) requires modification to support `erDiagram`. Use Mermaid.js in a web canvas (I can provide code if needed).
+- **Verify Schema**: The ERD matches the updated `schema.sql`, including new columns (`rfm_score`, `status`, `staff_roles`) and tables (`plans`, `gdpr_requests`).
+- **Troubleshooting**:
+  - Check Mermaid syntax in Live Editor if rendering fails.
+  - For simplified ERD, focus on core tables (`merchants`, `customers`, `points_transactions`, `vip_tiers`, `rewards`).
+  - Install Graphviz for Windows (`dot -V`) if extending GUI app.
+
+**Next Steps**
+- Test ERD in Mermaid Live Editor.
+- Request Python GUI app modification for `erDiagram` support.
+- Request simplified ERD or alternative formats (e.g., SchemaSpy PNG).
+- Share feedback or logs (`flowchart_app.log`) if integrating with GUI app.

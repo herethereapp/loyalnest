@@ -1,34 +1,18 @@
-Creating wireframes for the Herethere Loyalty App is an excellent way to visualize the user interface (UI) and user experience (UX) for both merchants and customers, complementing the user stories and flow diagram already discussed. Wireframes will help you, as a solo developer, plan the frontend (built with Vite + React and Shopify Polaris), ensure usability for your Shopify app’s points program, and demo the UI to beta merchants or Shopify App Store reviewers. Below, I’ll explain the purpose of wireframes, propose wireframes for key components (merchant dashboard and customer widget), and provide text-based descriptions (using ASCII or structured text) since I can’t generate graphical images directly. I’ll tailor this to your tech stack (NestJS, Vite + React, PostgreSQL, Redis, Twilio) and the points program logic (e.g., earning 1000 points for a $100 purchase, redeeming 200 points for a 10% discount).
-
-Purpose of Wireframes
-Wireframes are low-fidelity, simplified visual representations of the app’s UI, focusing on layout, navigation, and functionality without detailed styling. For the Herethere Loyalty App, wireframes serve to:
-	• Define UI Layout: Plan the merchant dashboard (for configuring points and rewards) and customer widget (for viewing points and redeeming rewards).
-	• Validate User Experience: Ensure merchants can easily set up the points program and customers can intuitively earn/redeem points.
-	• Guide Development: Provide a blueprint for your React frontend, using Shopify Polaris for the dashboard and Tailwind CSS for the widget.
-	• Demo to Stakeholders: Show beta merchants and Shopify reviewers how the app looks and feels, aligning with user stories (e.g., “As a merchant, I want to set points per dollar”).
-	• Iterate Early: Catch usability issues before coding, saving time as a solo developer.
-
-To create an ASCII wireframe for all pages of the Herethere Loyalty App based on the provided roadmap (from the document roadmap.txt), I’ll design wireframes for the Merchant Dashboard and Customer Widget pages as outlined in the roadmap, covering all specified features across Phases 1–3. The roadmap details the following pages for the Merchant Dashboard: Welcome Page, Points Program, Referrals Program, Customers, Analytics, Settings, On-Site Content, VIP Tiers, Activity Logs, and Bonus Campaigns. For the Customer Widget, it includes a single interface with points balance, redemption options, referral popup, RFM nudges, VIP tiers, gamification, and multilingual support. The Admin Module pages (Overview, Merchants, Admin Users, Logs, Plan Management, Integration Health, RFM Config Management, RFM Segment Export) will also be included.
-
-Since ASCII wireframes are text-based and limited in expressiveness, I’ll use simple layouts with labeled sections to represent each page’s key components, ensuring all features from the roadmap are covered. Each wireframe will be clearly labeled with the page name and include placeholders for UI elements like buttons, lists, charts, and inputs, as described in the roadmap. The wireframes will be grouped under a single <xaiArtifact> tag with text/plain content type, as ASCII art is best represented as plain text. A new UUID will be used since this is a distinct artifact from previous flowcharts.
-
-Wireframe Design Notes
-Merchant Dashboard: Built with Vite + React, includes pages like WelcomePage.tsx, PointsPage.tsx, etc., with features like setup tasks, points configuration, RFM charts (Chart.js), and on-site content (e.g., loyalty page, popups).
-Customer Widget: A React component displaying points balance, redemption options, referral popup, RFM nudges, VIP tiers, gamification (badges, leaderboards), and multilingual support.
-Admin Module: Includes pages for merchant management, logs, and advanced configurations, accessible to admins.
-Constraints: ASCII art will use simple characters (e.g., |, -, +, []) to represent layouts. Complex elements like charts will be indicated with placeholders (e.g., [Chart]).
-Content: Each page will reflect features from Phases 1–3, with annotations for phase-specific additions (e.g., VIP Tiers in Phase 2, Bonus Campaigns in Phase 3).
+```
 Herethere Loyalty App ASCII Wireframes
+
 Merchant Dashboard: Welcome Page (Phase 1)
 +-----------------------------+
 | Welcome to Herethere Loyalty |
++-----------------------------+
+| [Login: Shopify OAuth]      |
 +-----------------------------+
 | [Setup Tasks]               |
 | [ ] Launch Program          |
 | [ ] Add Widget to Theme     |
 | [ ] Configure Points        |
 | [ ] Setup RFM Analytics     |
-| [Button: Save]              |
+| [Button: Save, aria-label="Save setup tasks"] |
 +-----------------------------+
 | [Congratulatory Messages]   |
 | [x] First Redemption: Congrats! |
@@ -39,66 +23,75 @@ Merchant Dashboard: Points Program (Phase 1)
 +-----------------------------+
 | Points Program              |
 +-----------------------------+
+| [Login: Shopify OAuth]      |
++-----------------------------+
 | Earning Rules               |
-| [Purchases: 1 point/$]      |
+| [Purchases: 10 points/$]    |
 | [Signups: 200 points]       |
 | [Reviews: 100 points]       |
 | [Birthdays: 200 points]     |
-| [Button: Edit Rules]        |
+| [Button: Edit Rules, aria-label="Edit earning rules"] |
 +-----------------------------+
 | Redemption Options          |
 | [$5 Discount: 500 points]   |
 | [Free Shipping: 1000 points]|
 | [Free Product: 1500 points] |
 | [Coupons at Checkout]       |
-| [Button: Edit Redemptions]  |
+| [Button: Edit Redemptions, aria-label="Edit redemption options"] |
 +-----------------------------+
 | Branding                    |
 | [Rewards Panel: [Preview]]  |
 | [Launcher Button: [Icon]]   |
 | [Points Currency: Stars]    |
-| [Button: Customize]         |
+| [Button: Customize, aria-label="Customize branding"] |
 +-----------------------------+
-| Status: [Toggle: Enable/Disable] |
+| Status: [Toggle: Enable/Disable, aria-label="Toggle program status"] |
 +-----------------------------+
 
 Merchant Dashboard: Referrals Program (Phase 1, 2)
 +-----------------------------+
 | Referrals Program           |
 +-----------------------------+
+| [Login: Shopify OAuth]      |
++-----------------------------+
 | Referral Popup Config       |
-| [SMS/Email via Twilio]      |
-| [Reward: 10% off for Both]  |
-| [Social Sharing: FB, IG (P2)]|
-| [Button: Edit Config]       |
+| [SMS/Email via Twilio/SendGrid] |
+| [Reward: 50 points for Both] |
+| [Social Sharing: FB, IG (P2)] |
+| [Button: Edit Config, aria-label="Edit referral config"] |
 +-----------------------------+
 | Referral Page               |
-| [Incentives: Referrer/Friend]|
-| [Button: Preview Page]      |
+| [Incentives: Referrer/Friend] |
+| [Button: Preview Page, aria-label="Preview referral page"] |
 +-----------------------------+
-| Status: [Toggle: Active/Disable (P2)] |
+| Status: [Toggle: Active/Disable (P2), aria-label="Toggle referral status"] |
 +-----------------------------+
 | Referral Codes              |
 | [List: Pending/Completed/Expired] |
-| [Button: View Details]      |
+| [Button: View Details, aria-label="View referral details"] |
 +-----------------------------+
 
 Merchant Dashboard: Customers (Phase 1)
 +-----------------------------+
 | Customers                   |
 +-----------------------------+
-| Search: [Input: Name/Email] |
+| [Login: Shopify OAuth]      |
++-----------------------------+
+| Search: [Input: Name/Email (Encrypted), aria-label="Search customers"] |
+| [Spinner: Loading Customers] |
 +-----------------------------+
 | Customer List               |
-| [Name | Email | Points | RFM]|
+| [Name | Email (Encrypted) | Points | RFM] |
 | [John | j@example.com | 500 | At-Risk] |
 | [Jane | jane@doe.com | 200 | Active] |
-| [Button: View Details]      |
+| [Button: View Details, aria-label="View customer details"] |
 +-----------------------------+
 
 Merchant Dashboard: Analytics (Phase 1, 2, 3)
 +-----------------------------+
 | Analytics                   |
++-----------------------------+
+| [Login: Shopify OAuth]      |
 +-----------------------------+
 | Metrics                     |
 | [Program Members: 100]      |
@@ -108,137 +101,163 @@ Merchant Dashboard: Analytics (Phase 1, 2, 3)
 | [Loyalty Revenue (P2): $500]|
 | [Redemption Rate (P2): 10%] |
 | [Repeat Purchase (P3): 20%] |
+| [Button: Refresh, aria-label="Refresh analytics", posthog="analytics_viewed"] |
 +-----------------------------+
 | RFM Segments                |
 | [Chart: Bar Chart (Chart.js)] |
-| [Button: Export Report (P3)]|
+| [Button: Export Report (P3), aria-label="Export RFM report"] |
+| [Progress: Exporting CSV]   |
 +-----------------------------+
 
 Merchant Dashboard: Settings (Phase 1, 2, 3)
 +-----------------------------+
 | Settings                    |
 +-----------------------------+
+| [Login: Shopify OAuth]      |
++-----------------------------+
 | Store Details               |
-| [Input: Store Name]         |
-| [Input: Billing Plan]       |
+| [Input: Store Name, aria-label="Enter store name"] |
+| [Input: Billing Plan, aria-label="Select billing plan"] |
 | [Free: 300 orders]          |
 | [$29/mo: 500 orders]        |
 | [$99/mo: 1500 orders]       |
-| [Button: Save]              |
+| [Button: Save, aria-label="Save store details"] |
 +-----------------------------+
 | Branding                    |
 | [Rewards Panel: [Preview]]  |
-| [Button: Customize]         |
+| [Button: Customize, aria-label="Customize branding"] |
 +-----------------------------+
 | RFM Configuration (P2)      |
 | [Recency: <30 days]         |
-| [Frequency: 1-2]           |
+| [Frequency: 1-2]            |
 | [Monetary: <$50]            |
-| [Button: Setup Wizard]      |
+| [Button: Setup Wizard, aria-label="Configure RFM"] |
 | [Chart: Segment Preview]    |
 +-----------------------------+
 | Developer Toolkit (P3)      |
-| [Metafields: [Input]]       |
-| [Button: Save Config]       |
+| [Metafields: [Input], aria-label="Enter metafields"] |
+| [Button: Save Config, aria-label="Save developer config"] |
++-----------------------------+
+| Language Config (P3)        |
+| [Dropdown: English, Spanish, aria-label="Select language"] |
+| [Button: Save, aria-label="Save language config"] |
 +-----------------------------+
 
 Merchant Dashboard: On-Site Content (Phase 1, 2, 3)
 +-----------------------------+
 | On-Site Content             |
 +-----------------------------+
+| [Login: Shopify OAuth]      |
++-----------------------------+
 | Loyalty Page                |
 | [SEO-Friendly: [Preview]]   |
-| [Button: Edit]              |
+| [Button: Edit, aria-label="Edit loyalty page"] |
 +-----------------------------+
 | Rewards Panel               |
 | [Preview: Points Display]   |
-| [Button: Customize]         |
+| [Button: Customize, aria-label="Customize rewards panel"] |
 +-----------------------------+
 | Launcher Button             |
 | [Icon: [Preview]]           |
-| [Button: Edit]              |
+| [Button: Edit, aria-label="Edit launcher button"] |
 +-----------------------------+
 | Popups                      |
 | [Post-Purchase: [Preview]]  |
 | [Exit-Intent (P2): [Preview]] |
-| [Button: Configure]         |
+| [Button: Configure, aria-label="Configure popups"] |
 +-----------------------------+
 | Checkout Extensions (P2)    |
 | [Points Display: [Preview]] |
-| [Button: Configure]         |
+| [Button: Configure, aria-label="Configure checkout extensions"] |
 +-----------------------------+
 | Sticky Bar (P3)             |
 | [Preview: Rewards Bar]      |
-| [Button: Configure]         |
+| [Button: Configure, aria-label="Configure sticky bar"] |
++-----------------------------+
+| Post-Purchase Widget (P1)   |
+| [Preview: Points Earned]    |
+| [Button: Customize, aria-label="Customize post-purchase widget"] |
 +-----------------------------+
 
 Merchant Dashboard: VIP Tiers (Phase 2)
 +-----------------------------+
 | VIP Tiers                   |
 +-----------------------------+
+| [Login: Shopify OAuth]      |
++-----------------------------+
 | Tier Configuration          |
 | [Silver: $100+]             |
 | [Gold: $500+]               |
 | [Perks: Early Access, Gifts]|
-| [Button: Edit Tiers]        |
+| [Button: Edit Tiers, aria-label="Edit VIP tiers"] |
 +-----------------------------+
 | Notifications               |
 | [Email: Tier Change]        |
-| [Button: Configure]         |
+| [Button: Configure, aria-label="Configure tier notifications"] |
 +-----------------------------+
 
 Merchant Dashboard: Activity Logs (Phase 2)
 +-----------------------------+
 | Activity Logs               |
 +-----------------------------+
-| Filter: [Customer/Date]     |
-| [Input: Search]             |
+| [Login: Shopify OAuth]      |
++-----------------------------+
+| Filter: [Customer/Date, aria-label="Filter logs"] |
+| [Input: Search, aria-label="Search logs"] |
 +-----------------------------+
 | Logs                        |
 | [Points: John +200]         |
 | [Referral: Jane Sent]       |
 | [VIP: John -> Silver]       |
-| [Button: View Details]      |
+| [Button: View Details, aria-label="View log details"] |
 +-----------------------------+
 
 Merchant Dashboard: Bonus Campaigns (Phase 3)
 +-----------------------------+
 | Bonus Campaigns             |
 +-----------------------------+
+| [Login: Shopify OAuth]      |
++-----------------------------+
 | Campaign Types              |
-| [Time-Sensitive: [Config]]    |
+| [Time-Sensitive: [Config]]  |
 | [Goal Spend: [Config]]      |
 | [Points Multipliers: [Config]] |
 | [Limited Bonuses: [Config]] |
-| [Button: Create Campaign]   |
+| [Button: Create Campaign, aria-label="Create campaign"] |
 +-----------------------------+
 | Schedule                    |
-| [Start Date: [Input]]       |
-| [End Date: [Input]]         |
-| [Button: Save]              |
+| [Start Date: [Input], aria-label="Enter start date"] |
+| [End Date: [Input], aria-label="Enter end date"] |
+| [Button: Save, aria-label="Save campaign schedule"] |
 +-----------------------------+
 
 Customer Widget (Phase 1, 2, 3)
 +-----------------------------+
 | Herethere Loyalty Widget    |
 +-----------------------------+
+| [Login: Shopify OAuth]      |
+| [Mobile: Collapsed Widget]  |
++-----------------------------+
 | Points Balance: 500 Stars   |
-| [Button: View History]      |
+| [Button: View History, aria-label="View points history", posthog="history_viewed"] |
+| [Notification: Points Adjusted (P1)] |
 +-----------------------------+
 | Redemption Options          |
 | [$5 Discount: 500 points]   |
 | [Free Shipping: 1000 points]|
 | [Free Product: 1500 points] |
-| [Button: Redeem]            |
+| [Button: Redeem, aria-label="Redeem points", posthog="redeem_clicked"] |
+| [Error: Insufficient Points] |
 +-----------------------------+
 | Referral Popup              |
 | [SMS/Email: Invite Friend]  |
 | [Social: FB, IG (P2)]       |
-| [Reward: 10% off]           |
-| [Button: Send Invite]       |
+| [Reward: 50 points]         |
+| [Button: Send Invite, aria-label="Send referral invite", posthog="referral_clicked"] |
 +-----------------------------+
-| RFM Nudges                  |
+| RFM Nudges (P2)            |
 | [Stay Active! Earn More]    |
+| [Button: Dismiss, aria-label="Dismiss nudge", posthog="nudge_dismissed"] |
 +-----------------------------+
 | VIP Tier: Silver (P2)       |
 | [Perks: Early Access]       |
@@ -248,12 +267,14 @@ Customer Widget (Phase 1, 2, 3)
 | [Badges: Loyal Customer]    |
 | [Leaderboard: #5]           |
 +-----------------------------+
-| Language: [Dropdown] (P3)   |
+| Language: [Dropdown: English, Spanish, aria-label="Select language"] (P3) |
 +-----------------------------+
 
 Admin Module: Overview (Phase 1)
 +-----------------------------+
 | Admin Overview              |
++-----------------------------+
+| [Login: RBAC Auth]          |
 +-----------------------------+
 | Metrics                     |
 | [Merchant Count: 50]        |
@@ -261,79 +282,94 @@ Admin Module: Overview (Phase 1)
 | [Points Redeemed: 5000]     |
 | [Referral ROI: 5%]          |
 | [RFM Segments: [Chart]]     |
+| [Button: Refresh, aria-label="Refresh metrics", posthog="overview_viewed"] |
 +-----------------------------+
 
 Admin Module: Merchants (Phase 1)
 +-----------------------------+
 | Merchants                   |
 +-----------------------------+
-| Search: [Input: ID/Domain]  |
+| [Login: RBAC Auth]          |
++-----------------------------+
+| Search: [Input: ID/Domain, aria-label="Search merchants"] |
+| [Spinner: Loading Merchants] |
 +-----------------------------+
 | Merchant List               |
-| [ID | Domain | Plan]        |
-| [1 | store.com | Free]      |
-| [2 | shop.com | $99/mo]     |
-| [Button: View Details]      |
-| [Button: Adjust Points]     |
+| [ID | Domain | Plan | Status] |
+| [1 | store.com | Free | Active] |
+| [2 | shop.com | $99/mo | Suspended] |
+| [Button: View Details, aria-label="View merchant details"] |
+| [Button: Adjust Points, aria-label="Adjust customer points"] |
+| [Button: Suspend/Reactivate, aria-label="Toggle merchant status"] |
 +-----------------------------+
 
 Admin Module: Admin Users (Phase 1)
 +-----------------------------+
 | Admin Users                 |
 +-----------------------------+
+| [Login: RBAC Auth]          |
++-----------------------------+
 | User List                   |
 | [Name | Role | Status]      |
 | [Admin1 | Superadmin | Active] |
-| [Button: Add User]          |
-| [Button: Edit/Delete]       |
+| [Button: Add User, aria-label="Add admin user"] |
+| [Button: Edit/Delete, aria-label="Edit or delete admin user"] |
 +-----------------------------+
 
 Admin Module: Logs (Phase 1)
 +-----------------------------+
 | Logs                        |
 +-----------------------------+
+| [Login: RBAC Auth]          |
++-----------------------------+
 | API Logs                    |
 | [Timestamp | Endpoint | Status] |
-| [2025-06-29 | /points | OK] |
-| [Button: Filter]            |
+| [2025-07-04 | /points | OK] |
+| [Button: Filter, aria-label="Filter API logs"] |
 +-----------------------------+
 | Audit Logs                  |
 | [Timestamp | Action | User]  |
-| [2025-06-29 | Points Adjust | Admin1] |
-| [Button: Filter]            |
+| [2025-07-04 | Points Adjust | Admin1] |
+| [Button: Filter, aria-label="Filter audit logs"] |
 +-----------------------------+
 
 Admin Module: Plan Management (Phase 2)
 +-----------------------------+
 | Plan Management             |
 +-----------------------------+
+| [Login: RBAC Auth]          |
++-----------------------------+
 | Merchant Plans              |
 | [Store.com: Free -> $29/mo] |
 | [Shop.com: $99/mo -> $29/mo]|
-| [Button: Upgrade/Downgrade] |
+| [Button: Upgrade/Downgrade, aria-label="Change merchant plan"] |
 +-----------------------------+
 
 Admin Module: Integration Health (Phase 2, 3)
 +-----------------------------+
 | Integration Health          |
 +-----------------------------+
+| [Login: RBAC Auth]          |
++-----------------------------+
 | Integrations                |
 | [Shopify: OK]               |
 | [Twilio: Error]             |
-| [Klaviyo: OK (P2)]          |
+| [SendGrid: OK (P2)]         |
 | [Square: OK (P3)]           |
-| [Button: Check Status]      |
+| [Button: Check Status, aria-label="Check integration status"] |
 +-----------------------------+
 
 Admin Module: RFM Config Management (Phase 2)
 +-----------------------------+
 | RFM Config Management       |
 +-----------------------------+
+| [Login: RBAC Auth]          |
++-----------------------------+
 | RFM Thresholds              |
 | [Recency: <30 days]         |
 | [Frequency: 1-2]            |
 | [Monetary: <$50]            |
-| [Button: Edit Config]       |
+| [Button: Edit Config, aria-label="Edit RFM config"] |
 | [Chart: Segment Preview]    |
 +-----------------------------+
 
@@ -341,68 +377,84 @@ Admin Module: RFM Segment Export (Phase 3)
 +-----------------------------+
 | RFM Segment Export          |
 +-----------------------------+
+| [Login: RBAC Auth]          |
++-----------------------------+
 | Segments                    |
 | [At-Risk: 100 customers]    |
 | [Active: 200 customers]     |
-| [Button: Export CSV]        |
+| [Button: Export CSV, aria-label="Export RFM segments"] |
+| [Progress: Exporting CSV]   |
 | [Chart: Segment Breakdown]  |
 +-----------------------------+
 
+Admin Module: GDPR Requests (Phase 1)
++-----------------------------+
+| GDPR Requests               |
++-----------------------------+
+| [Login: RBAC Auth]          |
++-----------------------------+
+| Request List                |
+| [Customer | Type | Status]   |
+| [John | Data Request | Pending] |
+| [Jane | Redaction | Completed] |
+| [Button: Process Request, aria-label="Process GDPR request"] |
+| [Button: View Details, aria-label="View GDPR request details"] |
++-----------------------------+
 
 Explanation of Wireframes
 Merchant Dashboard:
-Welcome Page: Displays setup tasks (checkboxes) and congratulatory messages (Phase 1).
-Points Program: Configures earning rules, redemption options, branding, and program status (Phase 1).
-Referrals Program: Manages SMS/email and social sharing (Phase 2) configurations, referral page, and code tracking (Phase 1).
-Customers: Lists customers with name, email, points, RFM segments, and search (Phase 1).
-Analytics: Shows metrics (members, points, ROI) and RFM charts, with advanced reports (Phase 2, 3).
-Settings: Configures store details, billing, RFM thresholds (Phase 2), and developer toolkit (Phase 3).
-On-Site Content: Manages loyalty page, rewards panel, launcher, popups (Phase 1, 2), checkout extensions (Phase 2), and sticky bar (Phase 3).
-VIP Tiers: Configures spending-based tiers and perks (Phase 2).
-Activity Logs: Displays points, referrals, and VIP changes with filters (Phase 2).
-Bonus Campaigns: Sets up time-sensitive promotions and goal-based campaigns (Phase 3).
-Customer Widget: A single interface with points balance, redemption, referral popup, RFM nudges, VIP tiers (Phase 2), gamification (Phase 3), and language selection (Phase 3).
-Admin Module:
-Overview: Shows merchant count, points, ROI, and RFM charts (Phase 1).
-Merchants: Lists merchants with ID, domain, plan, and points adjustment (Phase 1).
-Admin Users: Manages admin accounts (Phase 1).
-Logs: Displays API and audit logs with filters (Phase 1).
-Plan Management: Handles plan upgrades/downgrades (Phase 2).
-Integration Health: Monitors Shopify, Twilio, Klaviyo, etc. (Phase 2, 3).
-RFM Config Management: Configures RFM thresholds with a preview (Phase 2).
-RFM Segment Export: Exports segment data with charts (Phase 3).
-Notes
-ASCII Limitations: The wireframes use simple borders and labels to represent UI elements. Complex components like charts are marked as [Chart], and buttons/inputs are indicated with [Button: ...] or [Input: ...].
-Completeness: All pages and features from the roadmap (Phases 1–3) are included, with phase-specific additions noted (e.g., (P2) for Phase 2 features).
-Usage: Copy the ASCII text into a text editor or view it in a terminal for clarity. If you need a graphical wireframe (e.g., using a tool like Figma exported to ASCII), let me know.
-Testing: If you’re using the Python GUI app (flowchart_gui_app_optimized.py), these wireframes complement the flowchart by showing UI layouts. You can paste the corrected Mermaid code (artifact ID: 5e11d3d7-6396-4f44-af72-9e5d934918fc) into the app to visualize the structure.
-If you need adjustments (e.g., more detailed ASCII art, specific page focus, or integration with the Python GUI app), or if you want to test these wireframes in a different format, please let me know! Also, confirm if the Python GUI app is now working after resolving the Graphviz issue, and share any flowchart_app.log contents if issues persist.
+- Welcome Page: Setup tasks and congratulatory messages (US-MD1, Phase 1).
+- Points Program: Configures earning/redemption rules, branding, and status (US-MD2, Phase 1).
+- Referrals Program: Manages SMS/email, social sharing (Phase 2), and referral codes (US-MD3, Phase 1).
+- Customers: Lists customers with encrypted email, points, RFM, and search (US-MD4, Phase 1).
+- Analytics: Displays metrics, RFM charts, and export options (US-MD5, US-MD13, Phase 1–3).
+- Settings: Configures store details, billing, RFM (Phase 2), developer toolkit, and language (Phase 3) (US-MD6, US-MD10, Phase 1–3).
+- On-Site Content: Manages loyalty page, rewards panel, launcher, popups, checkout extensions (Phase 2), sticky bar, and post-purchase widget (US-MD7, US-MD16, Phase 1–3).
+- VIP Tiers: Configures tiers and perks (US-MD8, Phase 2).
+- Activity Logs: Shows points, referrals, VIP changes with filters (US-MD9, Phase 2).
+- Bonus Campaigns: Sets up time-sensitive and goal-based campaigns (US-MD12, Phase 3).
 
-How to Use Wireframes
-	• Development: 
-		○ Use these wireframes to guide your React frontend implementation, ensuring the merchant dashboard uses Polaris components and the customer widget is lightweight for storefront integration.
-		○ Store wireframes in docs/wireframes/ as text files or export PNGs from Figma if you create them there.
-	• Demo: 
-		○ Share with beta merchants to validate usability (e.g., “Is the rewards table intuitive?”).
-		○ Include in Shopify App Store submission to show UI compliance with Shopify’s design standards.
-	• Iteration: 
-		○ Test with 1–2 beta merchants and adjust based on feedback (e.g., add a “Preview” button for rewards).
-Tools to Create Wireframes
-Since you’re a solo developer, use these free/low-cost tools to refine these wireframes:
-	• Figma (Free Tier): Create interactive mockups with Polaris components (Shopify provides a Polaris Figma kit).
-	• Balsamiq: Quick low-fidelity wireframes (free trial available).
-	• Draw.io: Integrate with VS Code or GitHub for simple layouts.
-	• Mermaid: Extend the flow diagram approach to UI layouts (less common but possible).
-If you want to create these yourself, copy the ASCII layouts above into a Figma frame or Balsamiq project and add Polaris/Tailwind styling placeholders.
-Additional Notes
-	• Polaris Compliance: Ensure the merchant dashboard uses Polaris components (Tabs, FormLayout, Button) to align with Shopify’s UX standards.
-	• Responsive Design: The customer widget should be mobile-friendly (use Tailwind’s sm:, md: classes).
-	• Accessibility: Add ARIA labels (e.g., aria-label="Redeem 200 points for 10% discount") for screen readers.
-	• Analytics: Track widget interactions with PostHog (e.g., posthog.capture('redeem_clicked')).
-If You Want More
-If you need additional wireframes or modifications, please specify:
-	• Other Screens: E.g., referral UI, POS integration, or analytics dashboard.
-	• Fidelity: Medium-fidelity with Polaris/Tailwind styles or interactive prototypes.
-	• Format: More detailed ASCII, Markdown tables, or guidance for Figma setup.
-	• Specific Features: E.g., focus on SMS referral flow or analytics charts.
-Alternatively, I can generate a sequence diagram to complement the flow diagram and wireframes, or refine the user stories to align with these UIs. Let me know your priority!
+Customer Widget:
+- Single interface with points balance, redemption, referral popup, RFM nudges (Phase 2), VIP tiers (Phase 2), gamification (Phase 3), and language dropdown (Phase 3) (US-CW1–CW11).
+- Includes order cancellation notification (US-CW6) and error states (e.g., insufficient points).
+
+Admin Module:
+- Overview: Shows merchant count, points, ROI, and RFM charts (US-AM1, Phase 1).
+- Merchants: Lists merchants with points adjustment and suspension (US-AM2, US-AM10, Phase 1).
+- Admin Users: Manages admin accounts (US-AM4, Phase 1).
+- Logs: Displays API and audit logs (US-AM5, Phase 1).
+- Plan Management: Handles plan changes (US-AM7, Phase 2).
+- Integration Health: Monitors integrations (US-AM8, Phase 2–3).
+- RFM Config Management: Configures RFM thresholds (US-AM9, Phase 2).
+- RFM Segment Export: Exports segment data (US-AM11, Phase 3).
+- GDPR Requests: Manages data requests/redactions (US-AM6, Phase 1).
+
+Notes:
+- ASCII Limitations: Uses simple borders and placeholders ([Chart], [Button: ...]) for clarity. Complex elements are indicated (e.g., [Spinner: Loading]).
+- Polaris Compliance: Merchant Dashboard uses Polaris components (Tabs, FormLayout, Button) for Shopify UX standards.
+- Tailwind CSS: Customer Widget uses Tailwind for responsive, mobile-friendly design (e.g., [Mobile: Collapsed Widget]).
+- Accessibility: Includes ARIA labels (e.g., aria-label="Redeem points") and supports keyboard navigation.
+- Scalability: Adds loading states (e.g., [Spinner: Loading Customers]) and export progress bars.
+- Security: Includes Shopify OAuth (Merchant Dashboard, Customer Widget) and RBAC (Admin Module) login prompts.
+- Multilingualism: Supports language dropdowns and JSONB content (`email_templates.body`, `merchants.language`).
+- Analytics: Integrates PostHog tracking (e.g., posthog="redeem_clicked").
+
+How to Use Wireframes:
+- Development: Guide React component implementation (e.g., WelcomePage.tsx, Widget.tsx) with Polaris (Merchant Dashboard) and Tailwind (Customer Widget).
+- Demo: Share with beta merchants to validate usability or include in Shopify App Store submission.
+- Iteration: Test with 1–2 merchants, adjust based on feedback (e.g., simplify redemption options).
+- Storage: Save in `docs/wireframes/` as text files or export to PNG via Figma.
+
+Tools to Refine Wireframes:
+- Figma: Use Shopify Polaris UI kit for high-fidelity mockups (free tier).
+- Balsamiq: Create low-fidelity wireframes (free trial).
+- Draw.io: Integrate with VS Code for simple layouts.
+- Mermaid: Extend flow diagrams to UI layouts (optional).
+
+If You Want More:
+- Specify additional screens (e.g., Shopify POS UI, detailed referral popup).
+- Request medium-fidelity wireframes with Polaris/Tailwind styles or Figma setup guidance.
+- Ask for integration with Python GUI app (flowchart_gui_app_optimized.py) or Jest tests for UI components.
+- Request a sequence diagram for a specific flow (e.g., GDPR request processing).
+Let me know your priority or if you’re facing issues with the Python GUI app (e.g., share flowchart_app.log)!
+```

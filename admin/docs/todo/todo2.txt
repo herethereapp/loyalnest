@@ -1,3 +1,26 @@
+
+	RFM.txt
+	schema.sql
+	Project Plan.txt
+	tech stack summary.txt
+	Technical Specifications.txt
+	user stories.md
+	Sequence Diagrams.txt
+	roadmap.txt
+	ERD.txt
+	feature analytics.txt
+	Internal Admin Module.txt
+
+
+
+
+
+
+
+
+
+
+
 Thank you for providing details about your updated project setup. By adding backend and frontend as workspaces in the root package.json of your tvp-herethere monorepo and running npm install in the root folder (E:\tvp-herethere), you’ve adopted a monorepo structure to manage dependencies efficiently and avoid duplicating shared dependencies. Your backend (NestJS, integrated with Shopify, PostgreSQL, and Redis) is running successfully at http://localhost:3000, with functional POST /products, GET /products, and GET /products/1 endpoints, as confirmed by previous tests. However, you’re still facing deprecation warnings from npm install (e.g., @shopify/network, eslint, rimraf, glob), a Shopify tunnel issue with @shopify/cli@3.81.2, and persistent npm configuration warnings (auto-install-peers, shamefully-hoist, enable-pre-post-scripts). This response will address the workspace setup, resolve the deprecation warnings, fix the Shopify tunnel, and ensure full integration of the frontend and backend.
 
 Analysis of the Workspace Setup and Issues

@@ -1,160 +1,140 @@
 # Purpose of the Internal Admin Module
 
-The internal admin module will serve as a centralized dashboard for you (the developer team) to:
-
-- Monitor and manage all merchants using Herethere Loyalty.
-- View aggregated platform analytics (e.g., total merchants, orders processed, points issued).
+The internal admin module is a centralized, standalone dashboard for the Herethere Loyalty developer team to:
+- Monitor and manage all merchants, including Shopify Plus (50,000+ customers, 1,000 orders/hour).
+- View aggregated platform analytics (e.g., merchant count, orders, points, RFM segments).
 - Perform administrative actions (e.g., suspend accounts, adjust points, manage plans).
-- Troubleshoot issues (e.g., view API logs, audit logs).
-- Support internal operations without relying on the Shopify admin panel.
+- Troubleshoot issues via API and audit logs.
+- Ensure GDPR/CCPA compliance and support internal operations without Shopify admin panel reliance.
 
-This module will be distinct from the merchant-facing Shopify admin panel, accessible only to your team via secure authentication (e.g., admin user login) and hosted outside the Shopify embedded app context (e.g., a standalone web app).
+The module is hosted outside the Shopify embedded app context (e.g., `admin.herethere.com`) with secure authentication (JWT, MFA) and is distinct from the merchant-facing dashboard.
 
 # Advice for Designing the Internal Admin Module
 
 ## 1. Key Features
 
-Based on your request for an overview and management of merchants, here are recommended features for the internal admin module, tailored to your needs and informed by the database schema (herethere_full_schema.sql):
-
 ### Overview Dashboard
-
-- Metrics: Display high-level stats:
-    - Total merchants (merchants table count).
-    - Active merchants (e.g., with recent orders or points transactions).
-    - Total orders processed (usage_records.order_count sum).
-    - Total points issued/redeemed (points_transactions sum).
-    - Revenue from paid plans (plans.base_price and usage_records).
-- Charts: Visualize trends (e.g., merchant growth, points activity) using Chart.js.
-- Recent Activity: Show recent merchant signups, API errors (api_logs), or audit events (audit_logs).
+- **Metrics**: 
+  - Total merchants (`merchants` count).
+  - Active merchants (orders or points in last 30 days).
+  - Total orders (`usage_records.order_count` sum).
+  - Points issued/redeemed (`points_transactions` sum).
+  - Revenue (`plans.base_price` sum).
+  - Plus merchant count (50,000+ customers).
+- **Charts**: Visualize trends (merchant growth, points activity, RFM segments) with Chart.js.
+- **Recent Activity**: Show merchant signups, API errors (`api_logs`), audit events (`audit_logs`), integration health (Shopify, Klaviyo).
+- **Success Metrics**: 90%+ query performance under 1s, 80%+ admin interaction rate.
+- **Implementation**: Cache metrics in Redis (`metrics:overview:{period}`), track via PostHog (`overview_viewed`).
 
 ### Merchants Management
-
-- List Merchants: Table of all merchants with columns for:
-    - Merchant ID (merchants.merchant_id).
-    - Shopify domain (merchants.shopify_domain).
-    - Plan (merchants.plan_id, joined with plans.name).
-    - Order count (usage_records.order_count for current period).
-    - Status (e.g., active, suspended, trial).
-    - Created/updated dates (merchants.created_at, updated_at).
-- Search/Filter: Search by domain, email, or plan; filter by status or order count.
-- View Merchant Details: Drill down into a merchant's profile:
-    - Store details (merchants.brand_settings, language).
-    - Customer count (customers count per merchant_id).
-    - Points transactions (points_transactions summary).
-    - Integrations (integrations list).
-    - API logs (api_logs for debugging).
-- Manage Merchants:
-    - Activate/suspend accounts (add status column to merchants).
-    - Upgrade/downgrade plans (merchants.plan_id).
-    - Reset API token (merchants.api_token).
-    - Adjust points balances for customers (customers.points_balance via points_transactions).
-    - Delete merchant (soft delete with status or hard delete with cascading constraints).
+- **List Merchants**: Table with:
+  - `merchant_id`, `shopify_domain`, `plan_id` (joined with `plans.name`), `order_count`, `status` (`active`, `suspended`, `trial`), `created_at`, `updated_at`, RBAC roles (`staff_roles`), customer count.
+- **Search/Filter**: By domain, email, plan, status, language, integration type.
+- **View Merchant Details**:
+  - Store details (`brand_settings`, `language` as JSONB).
+  - Customer count (`customers` per `merchant_id`).
+  - Points transactions (`points_transactions` summary).
+  - RFM segments (`customer_segments`).
+  - Integrations (`integrations.status`).
+  - API logs (`api_logs`).
+  - GDPR compliance status (webhook logs).
+- **Manage Merchants**:
+  - Activate/suspend (update `merchants.status`).
+  - Upgrade/downgrade plans (`merchants.plan_id`).
+  - Reset API token (`merchants.api_token`, encrypted).
+  - Adjust points (`customers.points_balance` via `points_transactions`).
+  - GDPR data export/delete (`customers/data_request`, `customers/redact`).
+  - Bulk actions (e.g., suspend multiple merchants).
+- **Implementation**: Partition `points_transactions`, `customer_segments` by `merchant_id`, use RBAC (`staff_roles`).
 
 ### Admin Users Management
-
-- List Admins: Table of admin users (admin_users) with username, email, created_at.
-- Manage Admins: Add/edit/delete admin accounts, update passwords (hashed with bcrypt).
-- Role-Based Access: Basic roles (e.g., superadmin, support) using admin_users.metadata (JSONB).
+- **List Admins**: Table with `admin_users.username`, `email` (encrypted), `metadata` (roles), `created_at`, last login.
+- **Manage Admins**: Add/edit/delete accounts, update passwords (bcrypt), enable MFA (TOTP via Auth0).
+- **Role-Based Access**: Granular roles (e.g., `{"role": "analytics", "permissions": ["view_metrics"]}`) in `admin_users.metadata`.
+- **Implementation**: Enforce password policies (12+ chars, 90-day rotation), track via PostHog (`admin_created`).
 
 ### Audit and Logs
-
-- Audit Logs: View actions by admin users (audit_logs.action, target_table, target_id).
-- API Logs: Monitor Shopify API calls (api_logs.route, status_code, timestamp) for debugging.
-- Import Logs: Track data imports (import_logs.success_count, fail_reason).
+- **Audit Logs**: View `audit_logs.action`, `target_table`, `target_id`, filter by action type (e.g., `merchant_suspended`).
+- **API Logs**: Monitor `api_logs.route`, `status_code`, `timestamp`, partitioned by `merchant_id`.
+- **Import Logs**: Track `import_logs.success_count`, `fail_reason`, including GDPR failures.
+- **Implementation**: Append-only `audit_logs` with triggers, partition `api_logs` by `merchant_id`.
 
 ### Platform Settings
-
-- Global Configurations: Manage default plans (plans), points expiry rules (program_settings.expiry_days), or feature flags (merchants.features_enabled).
-- Email Templates: Edit default email templates (email_templates) for all merchants.
-- Integrations: Monitor platform-wide integration health (integrations.status).
+- **Global Configurations**: Manage `plans`, points expiry (`program_settings.expiry_days`), feature flags (LaunchDarkly).
+- **Email Templates**: Edit `email_templates.body` (JSONB, e.g., `{"en": {...}, "es": {...}}`).
+- **Integrations**: Monitor health for Shopify (`/admin/api/2025-07/shop.json`), Klaviyo, Twilio, Square (`/v2/payments`), Lightspeed (`/api/2.0/sales`) with 3 retries.
+- **Implementation**: Cache settings in Redis, support multilingual templates.
 
 ## 2. Implementation Approach
-
-- Separation: Host the internal admin module as a standalone web app (e.g., admin.herethere.com) separate from the Shopify embedded app. This avoids Shopify's embedded app restrictions and simplifies authentication.
-- Authentication:
-    - Use admin_users table for login with username/password (bcrypt hashing).
-    - Implement JWT-based authentication for secure API access.
-    - Optionally integrate with OAuth2 (e.g., Auth0) for SSO in the future.
-- Tech Stack:
-    - Backend: Use NestJS (TypeScript) for admin APIs, leveraging existing merchants, admin_users, api_logs, etc., tables from herethere_full_schema.sql. Integrate with PostgreSQL for data storage and Redis for caching overview metrics.
-    - Frontend: Build a new Vite + React (TypeScript) app with Tailwind CSS (no Polaris, as it's not Shopify-embedded) for a clean, developer-focused UI. Use Chart.js for dashboard visualizations.
-    - Database: Use existing PostgreSQL schema with JSONB fields (e.g., merchants.brand_settings, admin_users.metadata) and add a status column to merchants for activation/suspension.
-    - Deployment: Host on a VPS (e.g., Ubuntu) using Docker Compose for NestJS, PostgreSQL, Redis, and the React frontend. Use Nginx as a reverse proxy to serve frontend assets and route API requests to NestJS.
-    - Security: Restrict access via IP whitelisting, VPN, or role-based permissions in admin_users.metadata.
-- Scalability:
-    - Cache overview metrics (e.g., merchant count, points issued) in Redis to reduce PostgreSQL load.
-    - Use PostgreSQL indexes on merchants(shopify_domain), api_logs(merchant_id, timestamp) for fast queries.
-    - Paginate merchant/customer lists to handle 5,000+ merchants.
-- Monitoring:
-    - Log admin actions in audit_logs for traceability.
-    - Integrate with tools like Sentry for error tracking.
-
-Enhancements & Best Practices
-- Add session expiry and refresh token logic for JWT to reduce risk from stolen tokens.
-- Consider optional multi-factor authentication (MFA) for superadmin accounts.
-- Enforce strong password requirements and periodic password rotation for admin users.
-- Explicitly implement rate limiting for sensitive admin endpoints to prevent brute-force attacks.
-- Make audit logs append-only or store them in a way that prevents tampering.
-- Use environment variables or a secrets manager for sensitive config (JWT secrets, DB passwords).
+- **Separation**: Host at `admin.herethere.com`, separate from Shopify app.
+- **Authentication**: JWT (1-hour expiry, refresh tokens), MFA for superadmins, bcrypt passwords.
+- **Tech Stack**:
+  - **Backend**: NestJS with GraphQL client (`@shopify/shopify-api`), PostgreSQL (partitioned tables), Redis.
+  - **Frontend**: Vite + React, TypeScript, Tailwind CSS, Chart.js.
+  - **Database**: Add `merchants.status` (CHECK: `'active', 'suspended', 'trial'`), partition `points_transactions`, `api_logs`, `customer_segments`.
+- **Scalability**:
+  - Cache metrics in Redis (`metrics:overview:{period}`).
+  - Partition tables by `merchant_id` for 10,000+ merchants.
+  - Paginate lists for large datasets.
+- **Monitoring**: Sentry (errors), Prometheus (performance), PostHog (usage).
+- **Security**: IP whitelisting, rate limiting (100 req/min), immutable `audit_logs`, encrypt `api_token`, `email`.
+- **Deployment**: Docker Compose, Nginx, feature flags (LaunchDarkly), rollback plan.
+- **Deliverable**: Scalable, secure admin module with OpenAPI docs.
 
 ## 3. Integration with Existing Stack
-
-- NestJS Backend: Add admin-specific endpoints (e.g., /admin/merchants, /admin/points/adjust) to the existing NestJS server, secured with JWT middleware. Reuse existing services for Shopify integrations (@shopify/shopify-app-express for OAuth, webhooks) and Twilio SMS referrals.
-- Frontend: Create a new Vite + React app (admin-frontend) alongside the merchant-facing frontend (dashboard, customer widget). Share reusable components (e.g., Chart.js visualizations, table components) where possible, but avoid Polaris for the admin module to maintain a distinct, non-Shopify UI.
-- Database: Reuse PostgreSQL tables (merchants, admin_users, api_logs, audit_logs, usage_records, points_transactions) and add a status column to merchants for activation/suspension. Leverage Redis for caching dashboard metrics.
-- Deployment: Deploy the admin module on the same VPS as the merchant app, using separate Docker containers for the admin frontend and backend. Configure Nginx to route /admin/* to the admin app and /api/admin/* to NestJS APIs.
-
-Enhancements & Best Practices
-- Structure the codebase so new admin features (e.g., new analytics, new integrations) can be added easily (modular design).
-- Schedule automated backups for the admin module's data and document the restore process.
+- **NestJS Backend**: Add `/api/admin/*` endpoints with GraphQL:
+  ```graphql
+  query {
+    shop { id, name, primaryDomain { url } }
+    customers(first: 100) { edges { node { id, email, ordersCount } } }
+  }
+  ```
+- **Frontend**: Share table/chart components, use Storefront API for customer data previews.
+- **Database**: Reuse tables, add `merchants.status`, encrypt sensitive fields.
+- **Deployment**: Separate containers for admin frontend/backend, route via Nginx.
+- **Integrations**: Support Shopify, Klaviyo, Twilio, Square, Lightspeed with retry policies.
+- **Deliverable**: Integrated module with Storefront API and additional platforms.
 
 ## 4. Security Considerations
-
-- Authentication: Use bcrypt for password hashing (admin_users.password) and JWT for session management.
-- Authorization: Implement role-based access in admin_users.metadata (e.g., { "role": "superadmin" }).
-- Audit Trail: Log all admin actions (e.g., merchant suspension, points adjustment) in audit_logs.
-- API Security: Require JWT for all /admin/* endpoints, validate inputs, and rate-limit requests.
-- Data Privacy: Mask sensitive data (e.g., merchants.api_token, customers.email) in the UI for non-superadmins.
-
-Enhancements & Best Practices
-- Log all access to sensitive data (not just actions) for compliance.
+- **Authentication**: JWT (1-hour expiry), refresh tokens, MFA via Auth0.
+- **Authorization**: Granular roles in `admin_users.metadata`.
+- **Audit Trail**: Immutable `audit_logs` with triggers, log data access.
+- **API Security**: Rate limit (100 req/min), sanitize inputs, GDPR webhooks (`customers/data_request`, `customers/redact`).
+- **Data Privacy**: Encrypt `merchants.api_token`, `customers.email`, mask in UI.
+- **Deliverable**: GDPR-compliant, secure module.
 
 ## 5. User Experience
-
-- Simplicity: Design a clean, table-heavy UI with search, filters, and pagination for easy merchant management.
-- Non-Technical Access: Since you have limited experience, I'll provide a pre-built Docker Compose setup and one-click deployment scripts for the VPS to simplify hosting.
-- Documentation: Include a README with login instructions, feature descriptions, and troubleshooting steps.
-
-Enhancements & Best Practices
-- Add bulk actions (e.g., suspend multiple merchants, adjust points for multiple customers) for efficiency.
-- Consider a "login as merchant" feature for support/admins to troubleshoot merchant issues directly.
-- Allow exporting merchant/customer data (CSV/Excel) for reporting or migration.
+- **Simplicity**: Table-heavy UI with multilingual labels, search, filters, pagination.
+- **Non-Technical Access**: Docker Compose setup, one-click deployment scripts.
+- **Advanced Features**: “Login as merchant” with RBAC, CSV/Excel exports with multilingual headers.
+- **Documentation**: Multilingual user guide, GDPR workflows, FAQs.
+- **Deliverable**: Multilingual, user-friendly UI.
 
 ## 6. Potential Challenges
-
-- Learning Curve: NestJS's structure is mitigated by AI-generated code (e.g., via Grok) and your study plan for TypeScript/NestJS.
-- Data Volume: 5,000+ merchants require efficient queries (solved with indexes, pagination, Redis).
-- Security: Robust authentication/authorization is critical to prevent unauthorized access (solved with JWT, audit logs).
-- Maintenance: Admin module adds complexity, but modular design (separate frontend/backend) simplifies updates.
+- **Learning Curve**: Mitigated by AI-generated code, modular NestJS services.
+- **Data Volume**: Addressed with partitioning, Redis, pagination for 10,000+ merchants.
+- **Security**: Ensured with JWT, MFA, immutable logs.
+- **Maintenance**: Simplified with feature flags, automated backups, rollback plan.
+- **Deliverable**: Mitigated challenges with Plus-scale testing.
 
 ## 7. Documentation & Onboarding
-
-Enhancements & Best Practices
-- Provide a simple user guide for new admins, including screenshots and common workflows.
-- Generate and maintain OpenAPI/Swagger docs for all admin endpoints.
+- **User Guide**: Multilingual, with screenshots, GDPR workflows, FAQs (e.g., “How to suspend a merchant”).
+- **OpenAPI Docs**: For `/api/admin/*` endpoints.
+- **Support**: FAQs for common tasks, troubleshooting scripts.
+- **Deliverable**: Comprehensive, multilingual documentation.
 
 ## 8. Compliance & Privacy
-
-Enhancements & Best Practices
-- Ensure GDPR/CCPA support: ability to export/delete merchant/customer data on request.
+- **GDPR/CCPA**: Support data export/delete via API, handle Shopify GDPR webhooks.
+- **Encryption**: Field-level encryption for `api_token`, `email`.
+- **Access Logging**: Log all sensitive data access in `audit_logs`.
+- **Deliverable**: GDPR/CCPA-compliant module.
 
 ## Summary Table of Key Suggestions
-
 | Area           | Suggestion                                                                 |
-|----------------|----------------------------------------------------------------------------|
-| Auth/Security  | JWT expiry/refresh, MFA, password policy, rate limiting, audit log integrity, secrets management |
-| Monitoring     | Alerts for suspicious activity, performance monitoring                     |
-| UX             | Bulk actions, impersonation, export/import                                |
-| Maintenance    | Modular code, automated backups                                            |
-| Docs           | Admin user guide, OpenAPI docs                                             |
-| Compliance     | GDPR/CCPA support, access logging                                          |
+|----------------|---------------------------------------------------------------------------|
+| Auth/Security  | JWT expiry/refresh, MFA, password policy, rate limiting (100 req/min), immutable logs, encryption |
+| Monitoring     | Sentry, Prometheus, PostHog, integration health checks                    |
+| UX             | Multilingual UI, bulk actions, login as merchant, CSV/Excel exports        |
+| Maintenance    | Feature flags, modular code, automated backups, rollback plan             |
+| Docs           | Multilingual guide, OpenAPI docs, GDPR workflows, FAQs                    |
+| Compliance     | GDPR/CCPA webhooks, data encryption, access logging                      |

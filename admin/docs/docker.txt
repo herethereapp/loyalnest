@@ -1,0 +1,387 @@
+Below is a comprehensive instruction guide for setting up and using Docker in your Herethere Loyalty App project, tailored to your tech stack as outlined in the updated tech stack summary.txt (artifact_id: 25814912-0215-4c04-b110-daece67f1d09). The guide is designed for a solo beginner developer deploying on a VPS (Ubuntu) with NestJS (backend), Vite + React (frontend), PostgreSQL (database), Redis (caching), and Bull (queue), as specified in your project requirements. It includes a Dockerfile for the NestJS backend, a Dockerfile for the React frontend, and a docker-compose.yml to orchestrate all services, ensuring scalability (100–50,000+ customers, 1,000 orders/hour), security (Let’s Encrypt SSL, pgcrypto), and integration with Shopify, Twilio, SendGrid, and PostHog. The instructions also cover deployment, testing, and monitoring (Prometheus/Grafana), aligning with schema.sql, user stories.md, Flow Diagram.txt, and Wireframes.txt.
+
+The artifact is a single docker-compose.yml file, as it encapsulates the core configuration for Dockerizing your project, with detailed instructions provided in the response for context and usage. The artifact uses a new UUID since it’s a distinct addition to your project documentation.
+
+Docker Instructions for Herethere Loyalty App
+Overview
+Docker containerizes your application’s services (NestJS, React, PostgreSQL, Redis, Bull) into isolated, reproducible environments, simplifying deployment on your Ubuntu VPS. Docker Compose orchestrates these services, ensuring they communicate effectively (e.g., NestJS queries PostgreSQL, uses Redis for caching). This guide provides step-by-step instructions to:
+
+Set up Docker and Docker Compose on your VPS.
+Create Dockerfiles for NestJS backend and Vite + React frontend.
+Configure docker-compose.yml for all services, including Nginx (frontend serving, SSL), Prometheus, and Grafana (monitoring).
+Deploy, test, and monitor the app, supporting Shopify OAuth, webhooks, and integrations (Twilio, SendGrid, PostHog, Shopify Flow).
+Address scalability (Bull queues, Redis caching, PostgreSQL partitioning) and security (Let’s Encrypt, pgcrypto, RBAC).
+Prerequisites
+VPS: Ubuntu 22.04 or later, with SSH access and a domain (e.g., herethere.example.com).
+Tools: Git, Node.js (for local development), and a code editor (e.g., VS Code).
+Project Setup: Repository with NestJS backend (/backend), Vite + React frontend (/frontend), and schema.sql for PostgreSQL.
+API Keys: Shopify App credentials (client ID, secret), Twilio SID/auth token, SendGrid API key, PostHog API key.
+Step 1: Install Docker and Docker Compose on VPS
+Update VPS:
+bash
+
+
+
+
+ssh user@your-vps-ip
+sudo apt update && sudo apt upgrade -y
+Install Docker:
+bash
+
+
+
+
+sudo apt install docker.io -y
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
+Log out and back in to apply group changes.
+Install Docker Compose:
+bash
+
+
+
+
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+docker-compose --version
+Verify Installation:
+bash
+
+
+
+
+docker --version
+docker-compose --version
+Step 2: Set Up Project Structure
+ODE
+Create the following structure in your project repository:
+
+text
+
+
+
+herethere-loyalty-app/
+├── backend/                # NestJS backend
+│   ├── src/
+│   ├── package.json
+│   ├── Dockerfile
+├── frontend/               # Vite + React frontend
+│   ├── src/
+│   ├── package.json
+│   ├── Dockerfile
+├── docker-compose.yml      # Docker Compose configuration
+├── nginx/
+│   ├── nginx.conf         # Nginx configuration
+├── schema.sql             # PostgreSQL schema
+Place schema.sql (from schema.sql) in the root for database initialization.
+Step 3: Create Dockerfiles
+Backend Dockerfile (backend/Dockerfile):
+dockerfile
+
+
+
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "run", "start:prod"]
+Uses Node.js 18 (alpine for smaller size).
+Installs dependencies, builds TypeScript, and runs the NestJS app.
+Frontend Dockerfile (frontend/Dockerfile):
+dockerfile
+
+
+
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+EXPOSE 3000
+CMD ["npm", "run", "preview"]
+Builds Vite + React app and serves it via Vite’s preview server.
+Step 4: Configure Docker Compose
+Create docker-compose.yml in the project root to define services (NestJS, React, PostgreSQL, Redis, Bull, Nginx, Prometheus, Grafana).
+
+docker-compose.yml
+yaml
+Edit in files
+•
+Show inline
+Step 5: Configure Nginx for SSL
+Create nginx/nginx.conf:
+
+nginx
+
+
+
+server {
+    listen 80;
+    server_name herethere.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name herethere.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/herethere.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/herethere.example.com/privkey.pem;
+
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://backend:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+Redirects HTTP to HTTPS and proxies API requests to the NestJS backend.
+Step 6: Configure Prometheus
+Create prometheus.yml:
+
+yaml
+
+
+
+scrape_configs:
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:3000']
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+Monitors backend and Nginx metrics (e.g., API latency, request rates).
+Step 7: Set Up Environment Variables
+Create .env in the project root:
+
+text
+
+
+
+SHOPIFY_CLIENT_ID=your-shopify-client-id
+SHOPIFY_CLIENT_SECRET=your-shopify-client-secret
+TWILIO_ACCOUNT_SID=your-twilio-sid
+TWILIO_AUTH_TOKEN=your-twilio-token
+SENDGRID_API_KEY=your-sendgrid-api-key
+POSTHOG_API_KEY=your-posthog-api-key
+JWT_SECRET=your-jwt-secret
+Securely store in a secret manager or restrict access (e.g., chmod 600 .env).
+Step 8: Deploy the Application
+Clone Repository:
+bash
+
+
+
+
+git clone https://github.com/your-repo/herethere-loyalty-app.git
+cd herethere-loyalty-app
+Copy .env:
+bash
+
+
+
+
+cp .env.example .env
+nano .env  # Add API keys
+Build and Run:
+bash
+
+
+
+
+docker-compose up -d --build
+Obtain SSL Certificate:
+bash
+
+
+
+
+docker-compose run --rm certbot
+Access Services:
+App: https://herethere.example.com
+Grafana: http://your-vps-ip:3001 (login: admin/admin)
+Backend APIs: https://herethere.example.com/api/*
+Verify Logs:
+bash
+
+
+
+
+docker-compose logs backend
+docker-compose logs frontend
+Step 9: Test the Deployment
+Unit/Integration Tests:
+Run Jest tests for NestJS APIs:
+bash
+
+
+
+
+cd backend
+npm test
+Run Cypress tests for frontend:
+bash
+
+
+
+
+cd frontend
+npm run cypress:run
+Load Testing:
+Use k6 to simulate 1,000 orders/hour:
+bash
+
+
+
+
+k6 run load-test.js
+Example load-test.js:
+javascript
+
+
+
+
+import http from 'k6/http';
+import { sleep } from 'k6';
+
+export let options = {
+  vus: 100,
+  duration: '1m',
+};
+
+export default function () {
+  http.post('https://herethere.example.com/api/points/earn', JSON.stringify({
+    customer_id: 'test-customer',
+    order_amount: 100,
+  }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  sleep(1);
+}
+Accessibility Testing:
+Use axe-core with Cypress:
+javascript
+
+
+
+
+import 'cypress-axe';
+
+describe('Customer Widget', () => {
+  it('is accessible', () => {
+    cy.visit('https://herethere.example.com');
+    cy.injectAxe();
+    cy.checkA11y();
+  });
+});
+Step 10: Monitor and Maintain
+Grafana Dashboard:
+Access http://your-vps-ip:3001, add Prometheus as a data source, and monitor API latency, Redis hits, and PostgreSQL query performance.
+Logs:
+Check Docker logs for errors:
+bash
+
+
+
+
+docker-compose logs --tail=100
+Backup Database:
+Export PostgreSQL data:
+bash
+
+
+
+
+docker exec -it herethere_postgres_1 pg_dump -U user herethere > backup.sql
+Update SSL:
+Renew Let’s Encrypt certificate every 90 days:
+bash
+
+
+
+
+docker-compose run --rm certbot renew
+Step 11: Integrate with CI/CD
+Add a GitHub Actions workflow (.github/workflows/deploy.yml):
+
+yaml
+
+
+
+name: Deploy to VPS
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to VPS
+        run: |
+          ssh user@your-vps-ip << 'EOF'
+            cd ~/herethere-loyalty-app
+            git pull
+            docker-compose down
+            docker-compose up -d --build
+          EOF
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+Store SSH_PRIVATE_KEY in GitHub Secrets.
+Notes
+Scalability:
+PostgreSQL partitioning on points_transactions and api_logs (via schema.sql) handles 50,000+ customers.
+Redis caching (points:customer:{id}) and Bull queues (for Twilio/SendGrid) reduce database load.
+Security:
+pgcrypto encrypts customers.email, merchants.api_token.
+RBAC in Admin Module uses admin_users.metadata JSONB.
+Shopify OAuth secures Merchant Dashboard and Customer Widget.
+Multilingualism:
+Accept-Language headers supported in NestJS middleware.
+JSONB fields (email_templates.body, nudges.title, program_settings.config) store multilingual content.
+Error Handling:
+NestJS handles 400 (invalid webhook), 429 (rate limits) with TypeORM transaction rollbacks.
+Logs errors to api_logs and PostHog (posthog.capture('error')).
+Shopify Compliance:
+Uses @shopify/shopify-app-express for OAuth and webhooks (orders/create, customers/data_request).
+Polaris ensures App Store-compliant UI for Merchant Dashboard.
+Troubleshooting
+Backend Errors: Check docker-compose logs backend for NestJS errors (e.g., missing .env variables).
+Frontend Issues: Verify VITE_API_BASE_URL and App Bridge setup in frontend/.env.
+Database: Ensure schema.sql includes CREATE EXTENSION pgcrypto; and all tables (gamification_achievements, nudge_events, gdpr_requests, import_logs).
+Logs: Share flowchart_app.log (from Python GUI app) or Docker logs if issues persist.
+How to Use
+Development:
+Run locally: docker-compose up --build.
+Test APIs with Postman (e.g., POST https://localhost/api/points/earn).
+Develop React components with Vite’s HMR (npm run dev in frontend/).
+Demo:
+Share https://herethere.example.com with beta merchants to validate UX.
+Include in Shopify App Store submission with Wireframes.txt screenshots.
+Documentation:
+Save this guide and docker-compose.yml in docs/docker/.
+Update README.md with setup instructions.
+If You Want More
+Specify additional configurations (e.g., Kubernetes for scaling, Cloudflare CDN).
+Request sample code (e.g., NestJS controller for GDPR webhooks, React component for Customer Widget).
+Ask for advanced monitoring (e.g., Grafana dashboards for Redis queue latency).
+Share flowchart_app.log for Python GUI app issues or specify needed integrations (e.g., Shopify Flow script).
+Next Steps
+Set Up VPS: Follow Step 1 to install Docker and Docker Compose.
+Configure Files: Create backend/Dockerfile, frontend/Dockerfile, nginx/nginx.conf, prometheus.yml, and .env.
+Deploy: Run docker-compose up -d --build and docker-compose run --rm certbot.
+Test: Execute Jest, Cypress, and k6 tests to validate functionality and performance.
+Monitor: Access Grafana (http://your-vps-ip:3001) for metrics.
+Feedback: Share any errors (e.g., Docker logs, flowchart_app.log) or request specific additions (e.g., Shopify Flow script, Jest test for points API).
+Would you like a sample NestJS controller for GDPR webhooks, a React component for the Customer Widget, a Shopify Flow script for RFM nudges, or a detailed Grafana dashboard setup? Let me know your priorities or any issues encountered!

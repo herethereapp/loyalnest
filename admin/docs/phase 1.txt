@@ -1,127 +1,396 @@
-Phase 1: TVP Development + Internal Admin Module (7 Months)
+To help you avoid failure as a solo beginner developer building the Herethere Loyalty App, I’ll break down Phase 1 from your `roadmap.txt`, `user stories.md` (artifact_id: 70e29c80-cbf4-4ea4-a98a-d486a38175f5), `Flow Diagram.txt` (artifact_id: 8c912ecc-4496-4729-8c52-364960837e9c), `Wireframes.txt` (artifact_id: 049937ce-3edc-4477-80e9-30603aaf8827), and `tech stack summary.txt` (artifact_id: 25814912-0215-4c04-b110-daece67f1d09) into a 6-week task plan. This aligns with your tech stack (NestJS, Vite + React, PostgreSQL, Redis, Shopify integrations) and focuses on delivering a Minimum Viable Product (MVP) for Phase 1, covering points earning/redemption, basic referrals, merchant dashboard, customer widget, and admin module basics, as well as GDPR compliance and Shopify App Store requirements. The plan is designed for a beginner, leveraging AI assistance (e.g., Grok, GitHub Copilot) and your Docker setup (artifact_id: 694141e2-6b28-4007-a43a-fa3ef1a49eec), with tasks prioritized to ensure usability, scalability (100–5,000 customers, 1,000 orders/hour), and compliance.
 
-Goal:
+### Phase 1 Overview
+**Features (from `roadmap.txt` and `user stories.md`)**:
+- **Merchant Dashboard**: Welcome Page (US-MD1), Points Program (US-MD2), Referrals Program (US-MD3), Customers (US-MD4), Analytics (US-MD5), Settings (US-MD6), On-Site Content (US-MD7).
+- **Customer Widget**: Points balance, redemption, referral popup (US-CW1–CW5).
+- **Admin Module**: Overview, Merchants, Admin Users, Logs (US-AM1–AM5).
+- **Backend**: Points earning (10 points/$), redemption (500 points for $5 off), referrals (SMS/email), Shopify OAuth, webhooks (orders/create, customers/data_request, customers/redact), basic RFM analytics (US-BI1–BI2, US-AM6).
+- **Tech Stack**: NestJS, Vite + React, Shopify Polaris, Tailwind CSS, PostgreSQL (`schema.sql`), Redis, Twilio, SendGrid, PostHog, Shopify App Bridge, Docker.
 
-Build a production-grade TVP with **Must Have** features: points (purchases, signups, reviews, birthdays), SMS/email referrals (Twilio), basic RFM analytics (churn risk), Shopify POS integration (points earning), automated loyalty email flows, data import, and a simplified admin module.
+**Goals**:
+- Build a functional MVP deployable on your Ubuntu VPS.
+- Validate with 1–2 beta merchants.
+- Prepare for Shopify App Store submission.
+- Minimize technical debt and ensure beginner-friendly tasks.
 
-Enhancements & Best Practices:
+**Duration**: 6 weeks (assuming 20–30 hours/week), with weekly sprints to maintain momentum.
 
-- Generate OpenAPI/Swagger docs for NestJS APIs.
-- Integrate centralized logging (Loki/Grafana) and monitoring (Prometheus, Grafana) on VPS.
-- Add health checks and alerting for NestJS, Rust, Redis, PostgreSQL, Nginx.
-- Schedule weekly PostgreSQL/Redis backups and quarterly disaster recovery drills.
-- Conduct manual exploratory and accessibility (a11y) testing for dashboard, widget, and admin UI.
-- Integrate PostHog for feature usage tracking (e.g., RFM wizard completion, referral popup clicks).
-- Implement guided onboarding (in-app tooltips, checklists) for merchants.
-- Conduct early usability testing of RFM setup wizard and SMS referral popup with 5–10 merchants.
-- Review security practices (OAuth, JWT, GDPR, field-level encryption for `customers.email`, `rfm_score`) bi-monthly.
-- Audit npm, cargo, and Docker dependencies monthly.
-- Document infrastructure as code (Docker Compose, Nginx) in GitHub.
-- Allocate 10% buffer time for freelancer coordination and AI code review.
-- Maintain developer and merchant documentation with screenshots and 1–2 minute videos for key flows (e.g., RFM setup, points configuration).
+**Tools**:
+- Git (GitHub) for version control.
+- Docker (`docker-compose.yml`) for local and VPS deployment.
+- VS Code with TypeScript, Prettier, ESLint.
+- Trello/Notion for task tracking.
 
-TVP Features:
+---
 
-1. Welcome Page:
-   - Setup tasks (launch program, add widget to theme, configure points, basic RFM).
-   - Congratulatory messages (e.g., first redemption, first referral).
-2. Program - Points:
-   - Earn: Purchases (1 point/$), signups (200 points), reviews (100 points), birthdays (200 points).
-   - Redeem: Discounts (500 points for $5), free shipping (1,000 points), free products (1,500 points), coupons at checkout.
-   - Branding: Customizable rewards panel, launcher button, points currency (e.g., "Stars").
-   - Status: Enable/disable program.
-3. Program - Referrals:
-   - SMS/email referral popup via Twilio, rewarding referrer/friend (10% off).
-   - Dedicated referral page with incentives for both.
-   - Track codes in `referrals` table (pending, completed, expired).
-4. Customers:
-   - List with name, email, points balance, RFM segment (e.g., "At-Risk").
-   - Search by name/email.
-5. Analytics:
-   - Metrics: Program members, points transactions, referral ROI, RFM-based churn risk (static thresholds: Recency <90 days, Frequency 1–2, Monetary <$50 for AOV $50).
-   - Chart: Bar chart for RFM segments in `AnalyticsPage.tsx` (Chart.js).
-6. On-Site Content:
-   - SEO-friendly loyalty page, rewards panel, launcher button, points display on product pages.
-   - Nudges: Post-purchase prompts, email capture popups.
-   - Launchers: Embedded in Shopify checkout and customer accounts.
-7. Settings:
-   - Store details, billing (Free: 300 orders, $29/month: 500 orders, $99/month: 1,500 orders).
-   - Branding: Basic rewards panel customization.
-   - RFM: Static thresholds (e.g., Recency 5: <30 days) in `program_settings.rfm_thresholds` (JSONB).
-8. Shopify Integration:
-   - OAuth via `@shopify/shopify-app-express`, `orders/create` webhook for points/RFM updates.
-   - POS: Points earning (1 point/$).
-9. Other:
-   - Automated loyalty email flows (e.g., points earned, redemption reminders).
-   - Data import from Smile.io, LoyaltyLion.
-10. Customer Widget:
-    - React component for points balance, redemption (discounts, free shipping), SMS/email referral popup, RFM nudges (e.g., "Stay Active!").
+### 6-Week Task Breakdown for Phase 1
 
-Internal Admin Module Features:
+#### Week 1: Project Setup and Database
+**Goal**: Set up the development environment, repository, and database to support core features.
+**Tasks**:
+1. **Set Up Repository**:
+   - Initialize Git repository: `git init herethere-loyalty-app`.
+   - Create `backend/`, `frontend/`, `docs/` folders.
+   - Add `.gitignore` (ignore `node_modules`, `.env`, `dist`).
+   - Push to GitHub: `git push origin main`.
+2. **Install Docker and Dependencies**:
+   - Follow Docker instructions (artifact_id: 694141e2-6b28-4007-a43a-fa3ef1a49eec) to install Docker and Docker Compose on your local machine and VPS.
+   - Create `.env` with Shopify, Twilio, SendGrid, and PostHog keys.
+   - Test: `docker-compose up --build` (minimal `docker-compose.yml` with PostgreSQL and Redis).
+3. **Set Up PostgreSQL**:
+   - Apply `schema.sql` (artifact_id: bdaa95cd-8112-47b8-8ef4-613df39ab4c3) with `pgcrypto` and tables (`merchants`, `customers`, `points_transactions`, `program_settings`, `rewards`, `referrals`, `gdpr_requests`).
+   - Add indexes: `CREATE INDEX idx_customers_email ON customers USING btree (email);`.
+   - Test: Connect via `psql` and insert test data (e.g., `INSERT INTO merchants (id, shop_domain) VALUES ('test-merchant', 'test.myshopify.com');`).
+4. **Set Up NestJS Backend**:
+   - Initialize NestJS: `npx @nestjs/cli new backend`.
+   - Install dependencies: `npm i @nestjs/typeorm typeorm pg @nestjs/config @shopify/shopify-app-express twilio @sendgrid/mail posthog-node`.
+   - Configure TypeORM in `app.module.ts` with `DATABASE_URL`.
+   - Test: Run `npm run start:dev` and verify `/health` endpoint.
+5. **Set Up Vite + React Frontend**:
+   - Initialize Vite: `npm create vite@latest frontend -- --template react-ts`.
+   - Install dependencies: `npm i @shopify/polaris @shopify/app-bridge-react tailwindcss postcss autoprefixer`.
+   - Configure Tailwind CSS and Polaris in `frontend/src/index.css`.
+   - Test: Run `npm run dev` and verify `http://localhost:5173`.
+6. **Document Setup**:
+   - Save setup notes in `docs/setup.md`.
+   - Update `README.md` with setup instructions.
 
-1. Overview: Merchant count, points issued/redeemed, referral ROI, RFM segments (Chart.js).
-2. Merchants: List (ID, domain, plan), search, view details, adjust points.
-3. Admin Users: Add/edit/delete admins in `admin_users` (bcrypt, JWT).
-4. Logs: View `api_logs`, `audit_logs` for debugging, RFM changes.
+**Deliverables**:
+- GitHub repository with `backend/`, `frontend/`, `docs/`.
+- Running Docker containers for PostgreSQL and Redis.
+- Initialized NestJS and Vite + React projects.
+- `schema.sql` applied with test data.
 
-Database Schema:
+**AI Assistance**:
+- Request: “Generate a NestJS `app.module.ts` for TypeORM and Shopify.”
+- Request: “Set up Tailwind CSS for Vite + React.”
 
-- Tables: `merchants`, `customers` (with `rfm_score` JSONB), `points_transactions`, `referrals`, `rewards`, `reward_redemptions`, `program_settings` (with `rfm_thresholds` JSONB), `shopify_sessions`, `customer_segments`, `admin_users`, `api_logs`, `audit_logs`.
-- Indexes: `customers(email, merchant_id, rfm_score)`, `points_transactions(customer_id)`, `referrals(merchant_id)`.
-- Use PostgreSQL with JSONB for RFM configs; defer MongoDB to Phase 4.
+#### Week 2: Shopify Integration and Points APIs
+**Goal**: Implement Shopify OAuth, webhooks, and points earning/redemption APIs.
+**Tasks**:
+1. **Shopify OAuth**:
+   - Configure `@shopify/shopify-app-express` in `app.module.ts` for OAuth.
+   - Implement `AuthController` with `/auth/login` and `/auth/callback` routes.
+   - Store sessions in `shopify_sessions` table.
+   - Test: Authenticate with a test Shopify store (`test.myshopify.com`).
+2. **Webhooks**:
+   - Set up webhooks (orders/create, customers/data_request, customers/redact) using Shopify CLI.
+   - Create `WebhookController` to handle `orders/create` (trigger points earning).
+   - Test: Simulate an order webhook and verify `points_transactions` insert.
+3. **Points APIs**:
+   - Create `PointsController` with `POST /api/points/earn` (10 points/$) and `POST /api/points/redeem` (500 points for $5 off).
+   - Use TypeORM transactions for redemption to ensure consistency.
+   - Example:
+     ```typescript
+     @Post('earn')
+     async earnPoints(@Body() body: { customer_id: string; order_amount: number }) {
+       const settings = await this.programSettingsService.findOne();
+       const points = body.order_amount * 10; // 10 points/$
+       await this.pointsService.create({ customer_id: body.customer_id, points, type: 'earn' });
+       await this.posthog.capture('points_earned', { customer_id: body.customer_id, points });
+       return { points };
+     }
+     ```
+   - Test: Use Postman to hit `/api/points/earn` and verify `points_transactions`.
+4. **Redis Caching**:
+   - Cache points balances in Redis (`points:customer:{id}`).
+   - Example:
+     ```typescript
+     async getPoints(customerId: string) {
+       const cached = await this.redis.get(`points:customer:${customerId}`);
+       if (cached) return parseInt(cached);
+       const customer = await this.customerService.findOne(customerId);
+       await this.redis.set(`points:customer:${customerId}`, customer.points);
+       return customer.points;
+     }
+     ```
+5. **Unit Tests**:
+   - Write Jest tests for `PointsController` (e.g., test points calculation, error handling for insufficient points).
+   - Example:
+     ```typescript
+     it('should throw 400 for insufficient points', async () => {
+       await expect(controller.redeemPoints({ customer_id: 'test', reward_id: 'reward1' }))
+         .rejects.toThrow(HttpException);
+     });
+     ```
+6. **Document APIs**:
+   - Create `docs/api.md` with API endpoints (`/api/points/earn`, `/api/points/redeem`).
 
-Tasks:
+**Deliverables**:
+- Shopify OAuth and webhook setup.
+- Functional `PointsController` with earning/redemption APIs.
+- Redis caching for points balances.
+- Jest tests for APIs.
+- API documentation in `docs/api.md`.
 
-1. Backend (NestJS/TypeScript):
-   - APIs: `/api/points` (purchases, signups, reviews, birthdays), `/api/referral` (SMS/email), `/api/analytics` (RFM segments, churn risk), `/api/data-import` (Smile.io/LoyaltyLion).
-   - Shopify: OAuth, `orders/create` webhook for points (1 point/$) and RFM updates (`rfm_score.r`).
-   - Twilio: SMS/email referrals, storing codes in `referrals` table.
-   - Admin APIs: `/admin/merchants`, `/admin/points/adjust`, `/admin/referrals`, `/admin/rfm-segments`, `/admin/logs` with JWT.
-   - Cache points, referrals, RFM scores in Redis.
-   - Use AI (GitHub Copilot, Cursor) for API boilerplate, Jest tests; manually review for Shopify compliance.
+**AI Assistance**:
+- Request: “Generate a NestJS `WebhookController` for orders/create.”
+- Request: “Write Jest tests for points redemption.”
 
-2. Backend (Rust/Wasm):
-   - Shopify Functions: Discounts (amount/percentage off), basic RFM score updates.
-   - Use Shopify CLI for testing; generate Rust code and `cargo test` cases with AI.
+#### Week 3: Merchant Dashboard (Core Pages)
+**Goal**: Build the Merchant Dashboard with Welcome Page, Points Program, and Settings using Shopify Polaris.
+**Tasks**:
+1. **Welcome Page (`WelcomePage.tsx`)**:
+   - Implement setup tasks (checkboxes for launch program, add widget, configure points) using Polaris `FormLayout` and `Checkbox`.
+   - Reference `Wireframes.txt` (Welcome Page).
+   - Example:
+     ```jsx
+     import { Page, FormLayout, Checkbox } from '@shopify/polaris';
+     const WelcomePage = () => (
+       <Page title="Welcome to Herethere Loyalty">
+         <FormLayout>
+           <Checkbox label="Launch Program" />
+           <Checkbox label="Add Widget to Theme" />
+         </FormLayout>
+       </Page>
+     );
+     ```
+   - Test: Run `npm run dev` and verify UI at `http://localhost:5173`.
+2. **Points Program (`PointsPage.tsx`)**:
+   - Create inputs for earning rules (purchases, signups) and redemption options ($5 off for 500 points) using Polaris `TextField` and `Button`.
+   - Fetch settings from `/api/points/settings` and save via `PUT /api/settings`.
+   - Reference `Wireframes.txt` (Points Program).
+3. **Settings (`SettingsPage.tsx`)**:
+   - Implement store details (name, billing plan) and branding options using Polaris `Form`.
+   - Reference `Wireframes.txt` (Settings).
+4. **Shopify App Bridge**:
+   - Integrate App Bridge for secure embedding in Shopify admin.
+   - Example:
+     ```jsx
+     import { Provider } from '@shopify/app-bridge-react';
+     const App = () => (
+       <Provider config={{ apiKey: import.meta.env.VITE_SHOPIFY_API_KEY, host: new URLSearchParams(window.location.search).get('host') }}>
+         <WelcomePage />
+       </Provider>
+     );
+     ```
+5. **Cypress Tests**:
+   - Write tests for Welcome Page and Points Program UI.
+   - Example:
+     ```javascript
+     describe('Welcome Page', () => {
+       it('displays setup tasks', () => {
+         cy.visit('/welcome');
+         cy.get('[aria-label="Launch Program"]').should('exist');
+       });
+     });
+     ```
+6. **Document Frontend**:
+   - Update `docs/frontend.md` with component descriptions.
 
-3. Frontend (Vite + React):
-   - Components: `WelcomePage.tsx` (setup, messages), `PointsPage.tsx` (configure earning/redemption), `ReferralsPage.tsx` (SMS/email config), `CustomersPage.tsx` (list, search), `AnalyticsPage.tsx` (RFM chart), `SettingsPage.tsx` (store, billing, branding), `CustomerWidget.tsx` (points, referrals, nudges).
-   - On-Site Content: SEO-friendly loyalty page, rewards panel, launcher button, points display, popups.
-   - Admin frontend: Dashboard, merchants, RFM segments, logs.
-   - Use AI for components, Cypress tests; outsource Polaris compliance review ($1,000).
+**Deliverables**:
+- Functional `WelcomePage.tsx`, `PointsPage.tsx`, `SettingsPage.tsx`.
+- App Bridge integration for Shopify admin.
+- Cypress tests for UI.
+- Frontend documentation in `docs/frontend.md`.
 
-4. Database:
-   - Apply `herethere_full_schema.sql` with JSONB for `rfm_score`, `rfm_thresholds`.
-   - Add indexes for performance (e.g., `customers(email, merchant_id)`).
-   - Use AI for index optimization.
+**AI Assistance**:
+- Request: “Generate a Polaris-compliant `PointsPage.tsx`.”
+- Request: “Write Cypress tests for Welcome Page.”
 
-5. Deployment:
-   - VPS (Ubuntu with Docker) using Docker Compose for NestJS, PostgreSQL, Redis, Vite + React frontend.
-   - Nginx for frontend assets and reverse proxy to NestJS APIs.
-   - GitHub Actions for CI/CD (testing, deployment to VPS).
-   - Provide Docker Compose scripts for VPS setup.
+#### Week 4: Customer Widget and Referrals
+**Goal**: Build the Customer Widget and referral system with Twilio/SendGrid integration.
+**Tasks**:
+1. **Customer Widget (`CustomerWidget.tsx`)**:
+   - Implement points balance display, redemption options, and referral popup using Tailwind CSS and minimal Polaris components.
+   - Reference `Wireframes.txt` (Customer Widget).
+   - Example:
+     ```jsx
+     import { Button } from '@shopify/polaris';
+     const CustomerWidget = ({ points }) => (
+       <div className="sm:p-4 md:p-6">
+         <h2>Points: {points} Stars</h2>
+         <Button aria-label="Redeem 500 points" onClick={() => posthog.capture('redeem_clicked')}>
+           Redeem $5 Off
+         </Button>
+       </div>
+     );
+     ```
+   - Test: Verify responsiveness (`sm:`, `md:` breakpoints) on mobile/desktop.
+2. **Referral API**:
+   - Create `ReferralController` with `POST /api/referral/send` for SMS/email invites.
+   - Use Bull queue for async Twilio/SendGrid calls.
+   - Example:
+     ```typescript
+     @Post('send')
+     async sendReferral(@Body() body: { customer_id: string; method: 'sms' | 'email' }) {
+       const queue = this.bullQueue('referrals');
+       await queue.add({ customer_id: body.customer_id, method: body.method });
+       await this.posthog.capture('referral_sent', { customer_id: body.customer_id });
+       return { status: 'queued' };
+     }
+     ```
+3. **Referral Popup**:
+   - Add a modal in `CustomerWidget.tsx` for SMS/email referral invites.
+   - Example:
+     ```jsx
+     import { Modal } from '@shopify/polaris';
+     const ReferralPopup = ({ open, onClose }) => (
+       <Modal open={open} onClose={onClose} title="Invite a Friend">
+         <button className="bg-blue-500 text-white p-2" onClick={() => posthog.capture('referral_clicked')}>
+           Send SMS Invite
+         </button>
+       </Modal>
+     );
+     ```
+4. **Cypress Tests**:
+   - Test widget interactions (e.g., redeem button, referral popup).
+   - Example:
+     ```javascript
+     it('sends referral invite', () => {
+       cy.get('[aria-label="Send SMS Invite"]').click();
+       cy.get('.success-message').should('contain', 'Invite sent');
+     });
+     ```
+5. **Document Widget**:
+   - Update `docs/frontend.md` with widget details.
 
-6. Testing:
-   - Unit: Jest for NestJS APIs, `cargo test` for Rust Functions, Jest for RFM logic.
-   - Integration: Shopify/Twilio/RFM/data-import flows (Jest).
-   - E2E: Dashboard, widget, popups, RFM UI (Cypress).
-   - Load test: 5,000 customers with Redis/PostgreSQL.
-   - Outsource QA to freelancer ($2,500) for Cypress and exploratory testing.
+**Deliverables**:
+- Functional `CustomerWidget.tsx` with points and referral popup.
+- `ReferralController` with Twilio/SendGrid integration.
+- Cypress tests for widget.
+- Updated `docs/frontend.md`.
 
-7. Shopify App Store:
-   - Optimize listing with demo videos (RFM analytics, SMS referrals, $29/month pricing, data import).
-   - Ensure Polaris, App Bridge, GDPR compliance (encrypt `customers.email`, `rfm_score`).
+**AI Assistance**:
+- Request: “Generate a Tailwind-styled `CustomerWidget.tsx` with referral popup.”
+- Request: “Write a NestJS `ReferralController` with Bull queue.”
 
-Timeline:
+#### Week 5: Admin Module and GDPR
+**Goal**: Build the Admin Module and ensure GDPR compliance.
+**Tasks**:
+1. **Admin Module (`AdminOverview.tsx`, `AdminMerchants.tsx`)**:
+   - Implement Overview (metrics: merchant count, points issued) and Merchants (list with ID, domain, plan) using Polaris.
+   - Reference `Wireframes.txt` (Admin Overview, Merchants).
+   - Example:
+     ```jsx
+     import { Page, DataTable } from '@shopify/polaris';
+     const AdminMerchants = ({ merchants }) => (
+       <Page title="Merchants">
+         <DataTable
+           columnContentTypes={['text', 'text', 'text']}
+           headings={['ID', 'Domain', 'Plan']}
+           rows={merchants.map(m => [m.id, m.domain, m.plan])}
+         />
+       </Page>
+     );
+     ```
+2. **RBAC for Admin Module**:
+   - Implement role-based access in `AuthController` using `admin_users.metadata` JSONB.
+   - Example:
+     ```typescript
+     @Get('admin')
+     @UseGuards(RBACGuard)
+     async getAdminData(@Req() req: Request) {
+       return this.adminService.getOverview(req.user);
+     }
+     ```
+3. **GDPR Webhooks**:
+   - Implement `WebhookController` for `customers/data_request` and `customers/redact`.
+   - Store requests in `gdpr_requests` table.
+   - Example:
+     ```typescript
+     @Post('webhooks/gdpr')
+     async handleGDPRWebhook(@Body() body: { topic: string; customer_id: string }) {
+       if (body.topic === 'customers/data_request') {
+         await this.gdprService.createRequest({ customer_id: body.customer_id, type: 'data_request' });
+       }
+       await this.posthog.capture('gdpr_request', { customer_id: body.customer_id });
+       return { status: 'success' };
+     }
+     ```
+4. **Unit Tests**:
+   - Write Jest tests for GDPR webhooks and RBAC.
+   - Example:
+     ```typescript
+     it('handles GDPR data request', async () => {
+       await controller.handleGDPRWebhook({ topic: 'customers/data_request', customer_id: 'test' });
+       const request = await gdprRequestService.findOne('test');
+       expect(request.type).toBe('data_request');
+     });
+     ```
+5. **Document Admin Module**:
+   - Update `docs/admin.md` with Admin Module details.
 
-- Month 1–2: Schema, OAuth, Points/Referral APIs, static RFM analytics.
-- Month 3–4: Vite + React dashboard, widget, admin frontend, RFM chart, on-site content (loyalty page, popups).
-- Month 5–7: POS integration, Rust Functions, data import, testing, VPS deployment.
+**Deliverables**:
+- Functional `AdminOverview.tsx`, `AdminMerchants.tsx`.
+- RBAC and GDPR webhook implementation.
+- Jest tests for admin and GDPR logic.
+- Admin documentation in `docs/admin.md`.
 
-Deliverables:
+**AI Assistance**:
+- Request: “Generate a Polaris-compliant `AdminOverview.tsx`.”
+- Request: “Write a NestJS `WebhookController` for GDPR.”
 
-- TVP with **Must Have** features: points, SMS/email referrals, basic RFM analytics, Shopify POS, email flows, data import.
-- Admin module with RFM segment views, merchant management, logs.
-- Shopify/Twilio/Yotpo/Klaviyo integrations.
-- Test suite, VPS deployment with Docker and Nginx.
-- Merchant documentation with setup guides and videos.
+#### Week 6: Testing, Deployment, and Beta Feedback
+**Goal**: Test the MVP, deploy to VPS, and gather beta merchant feedback.
+**Tasks**:
+1. **End-to-End Testing**:
+   - Run Cypress tests for Merchant Dashboard and Customer Widget.
+   - Test Shopify OAuth, points redemption, and referral flows.
+2. **Load Testing**:
+   - Use k6 to simulate 100 users hitting `/api/points/earn` (1,000 orders/hour).
+   - Example:
+     ```javascript
+     import http from 'k6/http';
+     export let options = { vus: 100, duration: '1m' };
+     export default function () {
+       http.post('http://localhost/api/points/earn', JSON.stringify({ customer_id: 'test', order_amount: 100 }));
+     }
+     ```
+3. **Deploy to VPS**:
+   - Follow Docker instructions: `docker-compose up -d --build`.
+   - Obtain SSL certificate: `docker-compose run --rm certbot`.
+   - Verify: Access `https://herethere.example.com` and check logs (`docker-compose logs`).
+4. **Beta Merchant Feedback**:
+   - Share demo URL with 1–2 merchants.
+   - Collect feedback on usability (e.g., “Is the Points Program page clear?”).
+   - Log feedback in `docs/feedback.md`.
+5. **Prepare Shopify App Store Submission**:
+   - Create a demo video showcasing OAuth, points earning, and redemption.
+   - Update `README.md` with setup and usage instructions.
+6. **Monitor Deployment**:
+   - Access Grafana (`http://your-vps-ip:3001`) to monitor API performance.
+   - Set up PostgreSQL backup cron job:
+     ```bash
+     echo "0 2 * * * docker exec herethere_postgres_1 pg_dump -U user herethere > /backups/backup-$(date +%F).sql" | crontab -
+     ```
+7. **Document Final MVP**:
+   - Finalize `docs/api.md`, `docs/frontend.md`, `docs/admin.md`.
+
+**Deliverables**:
+- Tested MVP with Cypress and k6.
+- Deployed app on VPS with SSL.
+- Beta merchant feedback in `docs/feedback.md`.
+- Shopify App Store demo video and updated `README.md`.
+
+**AI Assistance**:
+- Request: “Generate a k6 load test script for points APIs.”
+- Request: “Create a Shopify App Store demo script.”
+
+---
+
+### Weekly Summary
+- **Week 1**: Repository, Docker, PostgreSQL, NestJS, Vite + React setup.
+- **Week 2**: Shopify OAuth, webhooks, points APIs, Redis caching.
+- **Week 3**: Merchant Dashboard (Welcome, Points, Settings) with Polaris.
+- **Week 4**: Customer Widget, referral APIs with Twilio/SendGrid.
+- **Week 5**: Admin Module, RBAC, GDPR webhooks.
+- **Week 6**: Testing, VPS deployment, beta feedback, App Store prep.
+
+### Tips to Avoid Failure
+- **Use Git Branches**: Create branches for each week (e.g., `git checkout -b week1-setup`).
+- **Test Early**: Run Jest/Cypress tests after each component to catch bugs.
+- **Leverage AI**: Ask me for code snippets, tests, or explanations (e.g., “Explain TypeORM transactions”).
+- **Engage Merchants**: Validate UX with beta merchants in Week 6 to avoid rework.
+- **Monitor Progress**: Use Trello/Notion to track tasks and deadlines.
+- **Backup Regularly**: Ensure PostgreSQL and Redis backups are set up.
+
+### AI Assistance Options
+- Generate a Trello board JSON for this 6-week plan.
+- Provide sample code (e.g., `PointsController`, `CustomerWidget.tsx`).
+- Create Jest/Cypress/k6 test cases for specific features.
+- Debug issues (e.g., share `flowchart_app.log` or Docker logs).
+- Draft a Shopify App Store submission checklist.
+
+Would you like a Trello board setup, a specific code snippet (e.g., `PointsController`), a test case, or a Shopify App Store checklist? Alternatively, share any errors (e.g., Docker, `flowchart_app.log`) for troubleshooting. Let me know your priorities!
