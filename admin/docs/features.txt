@@ -1,5 +1,5 @@
 ```
-Herethere Loyalty App Features
+LoyalNest App Features
 
 ## MUST HAVE FEATURES
 Essential for the app to function as a loyalty program, ensuring core functionality, user engagement, Shopify App Store compliance, and scalability for 100–5,000 customers.

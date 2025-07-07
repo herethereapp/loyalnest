@@ -83,7 +83,7 @@ Weaknesses
 	• User Complaints: 
 		○ Basic plan lacks referral customization (e.g., message editing).
 		○ Analytics too basic on lower tiers, not worth cost.
-Opportunities for Herethere Loyalty
+Opportunities for LoyalNest
 	• Feature Differentiation: 
 		○ Offer SMS/WhatsApp referral sharing with post-purchase popups to surpass Smile.io’s referral weakness.
 		○ Provide advanced analytics (e.g., customer segmentation, referral ROI) on lower tiers ($39 plan).
@@ -103,8 +103,8 @@ Sources
 	• Third-Party Reviews: gameball.co, bloggle.app, capterra.ca
 	• User Feedback: Shopify App Store, G2.com
 
-Strategic Recommendations for Herethere Loyalty
-Based on Smile.io’s analysis, here’s how Herethere Loyalty can differentiate:
+Strategic Recommendations for LoyalNest
+Based on Smile.io’s analysis, here’s how LoyalNest can differentiate:
 	1. Referral Popups with SMS Sharing: 
 		○ Smile.io’s referral program lacks popups and SMS/WhatsApp, reducing visibility.
 		○ Implement post-purchase referral popups with SMS sharing (via Twilio), as shown in the Yotpo analysis (previous response), to drive engagement.
@@ -210,7 +210,7 @@ Weaknesses
 	• User Complaints: 
 		○ Misleading sales promises during onboarding.
 		○ High cost compared to competitors like Lootly.
-Opportunities for Herethere Loyalty
+Opportunities for LoyalNest
 	• Feature Differentiation: 
 		○ Implement SMS/WhatsApp referral sharing in MVP to surpass Yotpo’s referral weakness.
 		○ Add referral popups post-purchase for higher engagement (unlike Yotpo’s buried referral UI).
@@ -230,8 +230,8 @@ Sources
 	• Third-Party Reviews: analyzify.com, lootly.io, g2.com, tekpon.com
 	• User Feedback: Shopify App Store, G2 reviews
 
-Strategic Recommendations for Herethere Loyalty
-Based on Yotpo’s analysis, here’s how Herethere Loyalty can differentiate:
+Strategic Recommendations for LoyalNest
+Based on Yotpo’s analysis, here’s how LoyalNest can differentiate:
 	1. Referral Program with SMS Sharing: 
 		○ Yotpo’s referral system lacks SMS/WhatsApp and popups, reducing visibility.
 		○ Implement a post-purchase referral popup with SMS sharing (via Twilio) to boost engagement, a feature Lootly highlights as superior.
@@ -315,7 +315,7 @@ async fn create_referral(
     let conn = pool.get().expect("Couldn't get DB connection");
     use schema::referrals::dsl::*;
     let referral_code = Uuid::new_v4().to_string()[0..8].to_string();
-    let share_url = format!("https://herethere.com/refer/{}", referral_code);
+    let share_url = format!("https://herethere.dev/refer/{}", referral_code);
     let new_referral = models::NewReferral {
         referral_id: &Uuid::new_v4().to_string(),
         customer_id: &data.customer_id,
@@ -335,7 +335,7 @@ diesel::insert_into(referrals)
             env::var("TWILIO_TOKEN").unwrap(),
             None,
         );
-        let message = format!("Join Herethere Loyalty and get 10% off! Use code: {}", share_url);
+        let message = format!("Join LoyalNest and get 10% off! Use code: {}", share_url);
         twilio
             .send_message(
                 &env::var("TWILIO_PHONE").unwrap(),
@@ -708,7 +708,7 @@ I’ll keep explanations non-technical and provide deployment guides.
 
 Competitor Research: LoyaltyLion, BON Loyalty, Rivo Loyalty
 
-This research analyzes three competitors to the Herethere Loyalty App—LoyaltyLion, BON Loyalty, and Rivo Loyalty—focusing on their features, pricing, strengths, weaknesses, and user feedback, as outlined in the Project Plan for the Herethere Loyalty App. The goal is to identify differentiation opportunities, particularly in advanced analytics, competitive pricing, and Shopify POS support, to inform the app’s development and positioning.
+This research analyzes three competitors to the LoyalNest App—LoyaltyLion, BON Loyalty, and Rivo Loyalty—focusing on their features, pricing, strengths, weaknesses, and user feedback, as outlined in the Project Plan for the LoyalNest App. The goal is to identify differentiation opportunities, particularly in advanced analytics, competitive pricing, and Shopify POS support, to inform the app’s development and positioning.
 
 1. LoyaltyLion
 
@@ -745,7 +745,7 @@ Strengths
 
 Robust Feature Set: Comprehensive loyalty tools, including tiered programs, referrals, and gamification, suitable for small to enterprise-level stores.
 Integrations: Extensive ecosystem (50+ tools) enhances omnichannel and marketing capabilities, particularly with Klaviyo.
-Analytics: Detailed dashboards provide actionable insights, aligning with Herethere’s goal for advanced analytics.
+Analytics: Detailed dashboards provide actionable insights, aligning with LoyalNest’s goal for advanced analytics.
 Shopify POS Support: Strong omnichannel capabilities with POS integration, addressing a Smile.io limitation noted in the Project Plan.
 Reputation: Long track record (10+ years), #1 G2 rating, and case studies (e.g., Astrid and Miyu’s 50,000 signups) build trust.
 
@@ -761,12 +761,12 @@ User Feedback
 Positive: Merchants praise ease of setup, customization, and impact on retention. Shopify POS integration and gamification (badges, leaderboards) boost engagement.
 Negative: High costs for premium features and limited analytics in lower plans frustrate smaller merchants. Onboarding can be complex for non-technical users.
 
-Differentiation Opportunities for Herethere
+Differentiation Opportunities for LoyalNest
 
 Pricing: Offer more competitive pricing (e.g., $29/month as per Project Plan) with key features in lower tiers to attract small businesses.
 Simplicity: Design a simpler UI/UX for non-technical users, unlike LoyaltyLion’s potentially overwhelming feature set.
-Analytics: Match LoyaltyLion’s advanced analytics but include them in lower plans, aligning with Herethere’s USP of enhanced analytics.
-Innovation: Emphasize frequent updates (like Rivo’s weekly releases) to position Herethere as a modern alternative.
+Analytics: Match LoyaltyLion’s advanced analytics but include them in lower plans, aligning with LoyalNest’s USP of enhanced analytics.
+Innovation: Emphasize frequent updates (like Rivo’s weekly releases) to position LoyalNest as a modern alternative.
 
 
 2. BON Loyalty
@@ -804,13 +804,13 @@ Strengths
 
 Multi-Language Support: Unique ability to display 200+ languages simultaneously, ideal for global Shopify stores.
 Ease of Use: Simple, user-friendly interface praised for straightforward setup, suitable for non-technical merchants.
-Affordable Pricing: Competitive plans ($25-$349/month) with a robust free plan, aligning with Herethere’s goal of affordable pricing.
+Affordable Pricing: Competitive plans ($25-$349/month) with a robust free plan, aligning with LoyalNest’s goal of affordable pricing.
 Social Media Focus: Extensive social media earning rules enhance brand visibility, a differentiator for engagement-driven stores.
 Migration Support: Data import from competitors simplifies switching, a practical advantage.
 
 Weaknesses
 
-Limited Analytics: Analytics are basic compared to LoyaltyLion or Herethere’s planned advanced segmentation, limiting insights for larger stores.
+Limited Analytics: Analytics are basic compared to LoyaltyLion or LoyalNest’s planned advanced segmentation, limiting insights for larger stores.
 Newer Player: Less established than LoyaltyLion, with fewer reviews and a smaller market presence, potentially reducing trust.
 Feature Depth: Lacks advanced features like gamification or complex tiered programs compared to LoyaltyLion.
 Integration Ecosystem: Fewer integrations (e.g., Klaviyo, Shopify Flow) than LoyaltyLion or Rivo, limiting flexibility.
@@ -820,12 +820,12 @@ User Feedback
 Positive: Users appreciate simplicity, multi-language support, and responsive 24/7 support. Effective for boosting sales during events like Black Friday.
 Negative: Some users desire deeper analytics and more integrations. Limited feature depth for complex loyalty programs.
 
-Differentiation Opportunities for Herethere
+Differentiation Opportunities for LoyalNest
 
 Analytics: Offer advanced analytics (e.g., churn risk, segmentation) in all plans, surpassing BON’s basic dashboards.
-Integrations: Expand integration options (e.g., Klaviyo, Yotpo) to match Herethere’s planned ecosystem, outpacing BON’s limited scope.
-Feature Depth: Include gamification and tiered programs in Herethere’s MVP to compete with LoyaltyLion while maintaining BON’s simplicity.
-Market Positioning: Highlight Herethere’s scalability for 5,000+ merchants to build trust compared to BON’s newer status.
+Integrations: Expand integration options (e.g., Klaviyo, Yotpo) to match LoyalNest’s planned ecosystem, outpacing BON’s limited scope.
+Feature Depth: Include gamification and tiered programs in LoyalNest’s MVP to compete with LoyaltyLion while maintaining BON’s simplicity.
+Market Positioning: Highlight LoyalNest’s scalability for 5,000+ merchants to build trust compared to BON’s newer status.
 
 
 3. Rivo Loyalty
@@ -876,15 +876,15 @@ User Feedback
 Positive: Merchants highlight ease of setup, versatility, and excellent support. Boosts engagement and repeat sales effectively.
 Negative: Some users note limited advanced analytics compared to LoyaltyLion and desire broader platform support.
 
-Differentiation Opportunities for Herethere
+Differentiation Opportunities for LoyalNest
 
 Multi-Platform Support: Plan for compatibility with BigCommerce and Wix (as per Project Plan) to surpass Rivo’s Shopify-only focus.
 Advanced Analytics: Emphasize predictive analytics (e.g., churn risk) in all plans to compete with Rivo’s advanced but tier-restricted analytics.
 Enterprise Appeal: Build scalability for 5,000+ merchants with robust features to attract larger clients, where Rivo is less established.
-Free Plan: Include more advanced features (e.g., basic analytics, VIP tiers) in Herethere’s free plan to outshine Rivo’s limitations.
+Free Plan: Include more advanced features (e.g., basic analytics, VIP tiers) in LoyalNest’s free plan to outshine Rivo’s limitations.
 
 
-Summary and Recommendations for Herethere Loyalty App
+Summary and Recommendations for LoyalNest App
 Competitive Landscape
 
 LoyaltyLion: A premium, feature-rich platform with strong analytics and integrations but high costs and complexity. Best for mid-sized to enterprise stores needing omnichannel and advanced customization.
@@ -893,11 +893,11 @@ Rivo Loyalty: Modern, cost-effective, and Shopify-centric, with frequent updates
 
 Strategic Recommendations
 
-Pricing Strategy: Position Herethere with a free plan and paid tiers starting at $29/month (as per Project Plan), undercutting LoyaltyLion ($159+) and Rivo ($49+) while offering key features like analytics and POS support in lower tiers.
+Pricing Strategy: Position LoyalNest with a free plan and paid tiers starting at $29/month (as per Project Plan), undercutting LoyaltyLion ($159+) and Rivo ($49+) while offering key features like analytics and POS support in lower tiers.
 Analytics USP: Prioritize advanced analytics (e.g., churn risk, segmentation) in all plans, surpassing BON’s basic dashboards and matching LoyaltyLion’s depth without tier restrictions.
-Simplicity and Scalability: Combine BON’s user-friendly interface with LoyaltyLion’s scalability for 5,000+ merchants, ensuring Herethere appeals to both small and enterprise users.
-Shopify POS and Integrations: Emphasize robust Shopify POS support (like LoyaltyLion and Rivo) and expand integrations (e.g., Klaviyo, Yotpo, Skio) to match Herethere’s planned ecosystem, outpacing BON.
-Innovation and Updates: Adopt Rivo’s frequent update model to stay competitive, ensuring Herethere’s Rust backend and React frontend deliver modern features regularly.
-Global Reach: Consider BON’s multi-language support as a future feature to target global markets, enhancing Herethere’s appeal for international merchants.
+Simplicity and Scalability: Combine BON’s user-friendly interface with LoyaltyLion’s scalability for 5,000+ merchants, ensuring LoyalNest appeals to both small and enterprise users.
+Shopify POS and Integrations: Emphasize robust Shopify POS support (like LoyaltyLion and Rivo) and expand integrations (e.g., Klaviyo, Yotpo, Skio) to match LoyalNest’s planned ecosystem, outpacing BON.
+Innovation and Updates: Adopt Rivo’s frequent update model to stay competitive, ensuring LoyalNest’s Rust backend and React frontend deliver modern features regularly.
+Global Reach: Consider BON’s multi-language support as a future feature to target global markets, enhancing LoyalNest’s appeal for international merchants.
 
-By leveraging these insights, Herethere can carve a niche as an affordable, analytics-driven, and scalable loyalty app, competing effectively with LoyaltyLion’s premium offerings, BON’s simplicity, and Rivo’s modern approach.
+By leveraging these insights, LoyalNest can carve a niche as an affordable, analytics-driven, and scalable loyalty app, competing effectively with LoyaltyLion’s premium offerings, BON’s simplicity, and Rivo’s modern approach.

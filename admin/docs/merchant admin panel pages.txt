@@ -30,7 +30,7 @@ Pages and their content outline breakdown as below:
  
 # App's welcome page
 
-1). Welcome to Herethere Loyalty!
+1). Welcome to LoyalNest!
 
 Here's a preview of what's ahead as your program creates repeat purchases.
 
@@ -56,7 +56,7 @@ Complete the tasks below to ensure your customers can benefit from your loyalty 
 
 2.1). Launch your loyalty program
 
-2.2). Add Herethere Loyalty to your store theme
+2.2). Add LoyalNest to your store theme
 
 2.3). Choose a plan
 
@@ -84,7 +84,7 @@ Tailor actions to specific customer conditions
 
 3). Limit of 1 time per year
 
-4). Customers must enter their birthday in Herethere Loyalty UI at least 30 days in advance to be rewarded
+4). Customers must enter their birthday in LoyalNest UI at least 30 days in advance to be rewarded
 
 5). Status
 
@@ -686,11 +686,11 @@ This message appears on the order confirmation page and shows guests their refer
 
 3). Social sharing
 
-Let customers share their referral links on social platforms directly from the Herethere Loyalty Panel. 
+Let customers share their referral links on social platforms directly from the LoyalNest Panel. 
 
 Social settings
 
-Customers can share their referrals directly from the Herethere Loyalty Panel via Facebook, X, and Email.
+Customers can share their referrals directly from the LoyalNest Panel via Facebook, X, and Email.
 
 Customize referral link preview
 
@@ -819,12 +819,12 @@ Data on this page updates daily. Last updated 10 hours ago.
 
 - List of customers
 - List of customers who can redeem
-- List of discounts created by Herethere Loyalty
+- List of discounts created by LoyalNest
 - List of orders placed by referred customers
 - List of points redemptions
 - List of points transactions
 - List of referrals
-- List of Herethere Loyalty influenced orders
+- List of LoyalNest influenced orders
 - List of top earning customers all-time
 
 Advanced Reports
@@ -837,14 +837,14 @@ Upgrade your plan to access these advanced reports and better understand what's 
 - List of VIP tier changes (Growth)
 - Order earning rate over time (Growth)
 - Reward usage rate over time (Growth)
-- Herethere Loyalty benchmarks (Growth)
+- LoyalNest benchmarks (Growth)
 - VIP tier behaviour over time (Growth)
 - VIP tier changes over time (Growth)
 - VIP tier members over time (Growth)
 - Financial value of discounts issued over time (Plus)
 - Financial value of outstanding points (Plus)
 - Redemption rate over time (Starter)
-- Sales influenced by Herethere Loyalty over time (Starter)
+- Sales influenced by LoyalNest over time (Starter)
 - First time vs repeat earners over time (Starter)
 - First time vs repeat redeemers over time (Starter)
 - Outstanding points over time (Starter)
@@ -861,7 +861,7 @@ Upgrade your plan to access these advanced reports and better understand what's 
 
 1). Business Growth
 
-See how Herethere Loyalty is directly contributing to your bottom line over the last 12 months. From loyalty-driven revenue to the lifetime value of your program members.
+See how LoyalNest is directly contributing to your bottom line over the last 12 months. From loyalty-driven revenue to the lifetime value of your program members.
 
 - Loyalty-driven revenue
 - Member CLV
@@ -869,7 +869,7 @@ See how Herethere Loyalty is directly contributing to your bottom line over the 
 
 2). Program Health Snapshot
 
-Quickly assess how your loyalty program is performing over the last 30 days, benchmarked against similar merchants using Herethere Loyalty.
+Quickly assess how your loyalty program is performing over the last 30 days, benchmarked against similar merchants using LoyalNest.
 
 - Redemption rate
 - Order earning rate
@@ -945,9 +945,9 @@ Show shoppers that they’ve earned points after their purchase.
 
 # Integrations
 
-## Herethere Loyalty Integrations
+## LoyalNest Integrations
 
-One-click integrations that connect Herethere Loyalty with other marketing tools you love. Integrations are available when you upgrade.
+One-click integrations that connect LoyalNest with other marketing tools you love. Integrations are available when you upgrade.
 
 1). Recommended for you
 
@@ -1013,7 +1013,7 @@ Behavior-based email marketing automation built to help eCommerce stores turn th
 4). Do right by your customers
 
 - Arka packaging
-Arka + Herethere Loyalty offers a sustainability-related event for your customers to earn points in a loyalty program. Customers use a QR code to recycle your product packaging and earn points.
+Arka + LoyalNest offers a sustainability-related event for your customers to earn points in a loyalty program. Customers use a QR code to recycle your product packaging and earn points.
 
 - Remarkety
 Data-driven email marketing platform for retention, re-engagement, cart recovery, and more!
@@ -1124,7 +1124,7 @@ Current:
 
 2). All-Year Pricing Protection
 
-Herethere Loyalty automatically ensures you won't be charged extra during busy times like BFCM, flash sale seasons, or when importing orders. Any orders that exceed the total number of orders from the previous month by 20% will not be included towards your bill.
+LoyalNest automatically ensures you won't be charged extra during busy times like BFCM, flash sale seasons, or when importing orders. Any orders that exceed the total number of orders from the previous month by 20% will not be included towards your bill.
 
 ## Branding
 
@@ -1141,8 +1141,8 @@ Adjust the colors, shapes, and more of your panel and launcher here.
 
 Manage the email reminders you send your customers.
 
-1). Keep loyalty top of mind by integrating Herethere Loyalty + Klaviyo
-Integrate Herethere Loyalty with Klaviyo to add your loyalty program data to your emails with just one click.
+1). Keep loyalty top of mind by integrating LoyalNest + Klaviyo
+Integrate LoyalNest with Klaviyo to add your loyalty program data to your emails with just one click.
 
 2). Points
 
@@ -1184,7 +1184,7 @@ Manage the program language your customers see.
 
 Program language
 
-This is the language your customers see in Herethere Loyalty UI. 
+This is the language your customers see in LoyalNest UI. 
 
 Language
 
@@ -1206,7 +1206,7 @@ Where we'll send information about API updates or security alerts, and who we'll
 
 2). JavaScript SDK
 
-Use the objects, methods, and event listeners provided by Herethere.js on your site.
+Use the objects, methods, and event listeners provided by LoyalNest.js on your site.
 
 Enable / Disable
 

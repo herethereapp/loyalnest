@@ -1,5 +1,5 @@
 ```mermaid
-%% Sequence Diagrams for Herethere Loyalty App
+%% Sequence Diagrams for LoyalNest App
 %% Aligned with updated schema.sql, ERD.txt, and Technical Specifications.txt
 %% Covers Customer Widget, Merchant Dashboard, Admin Module, and Backend Integrations
 %% Includes Phases 1-3 features, scalability, security, and multilingual support

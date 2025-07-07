@@ -8,7 +8,7 @@ Week 1–2: TypeScript and NestJS Basics
 		○ NestJS (4 hours): Watch “NestJS Crash Course” by freeCodeCamp (YouTube, ~2 hours) or read NestJS docs (Overview, Controllers, Modules). Understand @Controller, @Injectable, and modules.
 		○ Shopify OAuth (2 hours): Read Shopify’s “Authenticate with OAuth” guide and @shopify/shopify-app-express docs.
 	• Tasks: 
-		○ Set up NestJS project (nest new herethere-loyalty) and install @shopify/shopify-app-express.
+		○ Set up NestJS project (nest new LoyalNest) and install @shopify/shopify-app-express.
 		○ Implement OAuth using my provided code (e.g., shopify.controller.ts from prior response).
 		○ Ask me for explanations (e.g., “Explain NestJS decorators”) or code (e.g., “Write a NestJS API for points”).
 		○ Practice: Create a simple NestJS API (e.g., /api/hello) with TypeScript interface.
@@ -17,13 +17,13 @@ Week 1–2: TypeScript and NestJS Basics
 
 Week 3–4: PostgreSQL, Redis, and NestJS APIs
 
-	• Goal: Set up PostgreSQL schema (herethere_full_schema.sql), integrate Redis, and build /api/referral and /api/analytics.
+	• Goal: Set up PostgreSQL schema (loyalnest_full_schema.sql), integrate Redis, and build /api/referral and /api/analytics.
 	• Resources: 
 		○ PostgreSQL (3 hours): Watch “PostgreSQL Tutorial for Beginners” by Net Ninja (YouTube, ~1.5 hours). Focus on JSONB and indexes (e.g., customers.rfm_score).
 		○ Redis (2 hours): Read Redis University’s “Introduction to Redis” (~1 hour) or watch “Redis Crash Course” by Traversy Media.
 		○ NestJS APIs (3 hours): NestJS docs (Providers, Dependency Injection) and Twilio’s Node.js SDK guide for SMS.
 	• Tasks: 
-		○ Apply herethere_full_schema.sql to PostgreSQL (use Docker: docker run -d -p 5432:5432 postgres).
+		○ Apply loyalnest_full_schema.sql to PostgreSQL (use Docker: docker run -d -p 5432:5432 postgres).
 		○ Integrate TypeORM or Prisma with NestJS for PostgreSQL (e.g., save points to points_transactions).
 		○ Set up Redis (e.g., docker run -d -p 6379:6379 redis) and cache points data.
 		○ Build /api/referral with Twilio SDK in NestJS.
@@ -74,7 +74,7 @@ services:
   postgres:
     image: postgres:latest
     environment:
-      POSTGRES_DB: herethere
+      POSTGRES_DB: LoyalNest
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
     ports:

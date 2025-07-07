@@ -1,0 +1,1241 @@
+Your decision to install WordPress on a separate domain (instead of herethere.dev) and deploy the LoyalNest App's backend and frontend under herethere.dev (e.g., production on loyalty.herethere.dev and development on dev.herethere.dev) is a strategic move to isolate your marketing site from your Shopify app’s infrastructure. Since your app is an embedded Shopify app (accessed via Shopify admin/storefront, with loyalty.herethere.dev handling OAuth, webhooks, and App Bridge, hidden from merchants/customers) and uses a microservices architecture (Vite + React frontend, NestJS backend, PostgreSQL, Redis, Bull, managed by Docker Compose), I’ll provide a comprehensive plan to deploy your app’s backend and frontend under herethere.dev on your Ubuntu VPS. 
+
+(in future, will replace herethere.dev with loyalnest.dev)
+
+This plan will:
+
+	• Deploy the production app on loyalty.herethere.dev (frontend on localhost:3000, backend on localhost:4000, in /home/htdev/www/herethere.dev/app).
+	• Deploy the development app on dev.herethere.dev (frontend on localhost:5000, backend on localhost:6000, in /home/htdev/www/herethere.dev/dev).
+	• Secure the setup to prevent code disclosure to search engines (addressing your earlier concern).
+	• Maintain compatibility with Shopify’s requirements and your microservices architecture.
+
+Comprehensive Plan to Deploy Backend and Frontend Under herethere.dev
+
+Prerequisites
+
+	• VPS Setup: Ubuntu VPS with htdev user, SSH access, and sudo su - for root privileges.
+	• Domain: herethere.dev with DNS configured (e.g., A records for loyalty.herethere.dev and dev.herethere.dev pointing to your VPS IP, e.g., 192.0.2.1).
+	• Repositories: Access to your production and development Git repositories for frontend (Vite + React) and backend (NestJS).
+	• Shopify Partner Dashboard: Configured for production (loyalty.herethere.dev) and development (dev.herethere.dev) apps.
+
+1. Set Up VPS Environment
+
+Goal: Prepare the VPS for deploying the app’s backend and frontend, installing necessary dependencies.
+
+Steps:
+	• Update System and Install Dependencies: 
+bash
+CollapseWrapRun
+Copy
+
+sudo su -
+
+apt update
+
+apt install -y nginx docker.io docker-compose certbot python3-certbot-nginx ufw
+
+systemctl enable docker
+
+systemctl start docker
+
+usermod -aG docker htdev
+
+ufw allow 22
+
+ufw allow 80
+
+ufw allow 443
+
+ufw enable
+	• Verify Docker: 
+bash
+CollapseWrapRun
+Copy
+
+docker --version
+
+docker-compose --version
+
+
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+	• Secure Nginx: 
+		○ Disable directory indexing: 
+bash
+CollapseWrapRun
+Copy
+
+nano /etc/nginx/nginx.conf
+Add to http block: 
+nginx
+CollapseWrap
+Copy
+
+autoindex off;
+bash
+CollapseWrapRun
+Copy
+
+nginx -t
+
+systemctl reload nginx
+
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+2. Deploy Production App on loyalty.herethere.dev
+Goal: Deploy the production frontend and backend in /home/htdev/www/herethere.dev/app, accessible via loyalty.herethere.dev.
+Steps:
+	• Create Directory Structure: 
+bash
+CollapseWrapRun
+Copy
+
+su - htdev
+
+mkdir -p /home/htdev/www/herethere.dev/app/{frontend,backend}
+	• Clone Repositories: 
+bash
+CollapseWrapRun
+Copy
+
+cd /home/htdev/www/herethere.dev/app
+
+git clone <prod-frontend-repo> frontend
+
+git clone <prod-backend-repo> backend
+	• Configure Docker Compose: 
+bash
+CollapseWrapRun
+Copy
+
+nano /home/htdev/www/herethere.dev/app/docker-compose.yml
+yaml
+CollapseWrap
+Copy
+
+version: '3'
+
+services:
+
+  frontend:
+
+    build: ./frontend
+
+    ports:
+
+      - "3000:3000"
+
+    environment:
+
+      - VITE_SHOPIFY_API_KEY=${SHOPIFY_API_KEY}
+
+      - VITE_APP_URL=https://loyalty.herethere.dev
+
+    volumes:
+
+      - ./frontend/public:/app/public
+
+  backend:
+
+    build: ./backend
+
+    ports:
+
+      - "4000:4000"
+
+    environment:
+
+      - APP_URL=https://loyalty.herethere.dev
+
+      - DATABASE_URL=postgres://user:pass@postgres:5432/herethere_prod
+
+      - REDIS_URL=redis://redis:6379
+
+    depends_on:
+
+      - postgres
+
+      - redis
+
+  postgres:
+
+    image: postgres:latest
+
+    environment:
+
+      - POSTGRES_DB=herethere_prod
+
+      - POSTGRES_USER=user
+
+      - POSTGRES_PASSWORD=pass
+
+    volumes:
+
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+
+    image: redis:latest
+
+    volumes:
+
+      - redis_data:/data
+
+  bull:
+
+    image: redis:latest
+
+    command: redis-server --appendonly yes
+
+    volumes:
+
+      - bull_data:/data
+
+volumes:
+
+  postgres_data:
+
+  redis_data:
+
+  bull_data:
+	• Set Environment Variables: 
+bash
+CollapseWrapRun
+Copy
+
+nano /home/htdev/www/herethere.dev/app/.env
+env
+CollapseWrap
+Copy
+
+SHOPIFY_API_KEY=your_production_api_key
+	• Secure Frontend (prevent direct access): 
+		○ Edit /home/htdev/www/herethere.dev/app/frontend/src/App.tsx: 
+tsx
+CollapseWrap
+Copy
+
+import { Provider } from "@shopify/app-bridge-react";
+
+import { useEffect } from "react";
+
+
+const config = {
+
+    apiKey: process.env.VITE_SHOPIFY_API_KEY,
+
+    host: new URLSearchParams(window.location.search).get("host"),
+
+    forceRedirect: true,
+
+};
+
+
+function App() {
+
+    useEffect(() => {
+
+        if (!config.host) {
+
+            window.location.href = "https://herethereloyalty.com"; // Replace with your WordPress domain
+
+        }
+
+    }, []);
+
+
+    return (
+
+        <Provider config={config}>
+
+            <div>Merchant Dashboard</div>
+
+        </Provider>
+
+    );
+
+}
+		○ Disable source maps in /home/htdev/www/herethere.dev/app/frontend/vite.config.ts: 
+typescript
+CollapseWrapRun
+Copy
+
+export default defineConfig({
+
+  build: {
+
+    sourcemap: false,
+
+  },
+
+});
+		○ Rebuild: 
+bash
+CollapseWrapRun
+Copy
+
+cd /home/htdev/www/herethere.dev/app/frontend
+
+npm run build
+	• Secure Backend: 
+		○ Ensure API endpoints require authentication (e.g., Shopify tokens) in /home/htdev/www/herethere.dev/app/backend/src/main.ts: 
+typescript
+CollapseWrapRun
+Copy
+
+app.useGlobalGuards(new ShopifyAuthGuard());
+	• Start Services: 
+bash
+CollapseWrapRun
+Copy
+
+cd /home/htdev/www/herethere.dev/app
+
+docker-compose up -d
+
+docker ps
+	• Configure Nginx: 
+bash
+CollapseWrapRun
+Copy
+
+sudo nano /etc/nginx/sites-available/loyalty.herethere.dev
+nginx
+CollapseWrap
+Copy
+
+server {
+
+    listen 443 ssl;
+
+    server_name loyalty.herethere.dev;
+
+    ssl_certificate /etc/letsencrypt/live/herethere.dev/fullchain.pem;
+
+    ssl_certificate_key /etc/letsencrypt/live/herethere.dev/privkey.pem;
+
+    root /home/htdev/www/herethere.dev/app/frontend/public;
+
+    index index.html;
+
+
+    # Block sensitive files
+
+    location ~* /(src|node_modules|\.env|\.git|Dockerfile|docker-compose.*\.yml) {
+
+        deny all;
+
+        return 403;
+
+    }
+
+
+    location / {
+
+        if ($request_uri !~ "^/(api|auth)/") {
+
+            return 301 https://herethereloyalty.com; # Replace with your WordPress domain
+
+        }
+
+        try_files $uri $uri/ @frontend;
+
+    }
+
+
+    location /api/ {
+
+        proxy_pass http://localhost:4000/;
+
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+
+        proxy_set_header Connection 'upgrade';
+
+        proxy_set_header Host $host;
+
+        proxy_cache_bypass $http_upgrade;
+
+    }
+
+
+    location /auth/ {
+
+        proxy_pass http://localhost:3000;
+
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+
+        proxy_set_header Connection 'upgrade';
+
+        proxy_set_header Host $host;
+
+        proxy_cache_bypass $http_upgrade;
+
+    }
+
+
+    location @frontend {
+
+        proxy_pass http://localhost:3000;
+
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+
+        proxy_set_header Connection 'upgrade';
+
+        proxy_set_header Host $host;
+
+        proxy_cache_bypass $http_upgrade;
+
+    }
+
+}
+
+
+server {
+
+    listen 80;
+
+    server_name loyalty.herethere.dev;
+
+    return 301 https://$host$request_uri;
+
+}
+bash
+CollapseWrapRun
+Copy
+
+sudo ln -s /etc/nginx/sites-available/loyalty.herethere.dev /etc/nginx/sites-enabled/
+
+sudo nginx -t
+
+sudo systemctl reload nginx
+	• Set Up SSL: 
+bash
+CollapseWrapRun
+Copy
+
+sudo certbot --nginx -d loyalty.herethere.dev
+	• Add robots.txt: 
+bash
+CollapseWrapRun
+Copy
+
+nano /home/htdev/www/herethere.dev/app/frontend/public/robots.txt
+text
+CollapseWrap
+Copy
+
+User-agent: *
+
+Disallow: /
+text
+CollapseWrap
+Copy
+
+version: '3'
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_SHOPIFY_API_KEY=${SHOPIFY_API_KEY}
+      - VITE_APP_URL=https://loyalty.herethere.dev
+    volumes:
+      - ./frontend/public:/app/public
+  backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    environment:
+      - APP_URL=https://loyalty.herethere.dev
+      - DATABASE_URL=postgres://user:pass@postgres:5432/herethere_prod
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+  postgres:
+    image: postgres:latest
+    environment:
+      - POSTGRES_DB=herethere_prod
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:latest
+    volumes:
+      - redis_data:/data
+  bull:
+    image: redis:latest
+    command: redis-server --appendonly yes
+    volumes:
+      - bull_data:/data
+volumes:
+  postgres_data:
+  redis_data:
+  bull_data:
+Show in sidebar
+text
+CollapseWrap
+Copy
+
+server {
+    listen 443 ssl;
+    server_name loyalty.herethere.dev;
+    ssl_certificate /etc/letsencrypt/live/herethere.dev/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/herethere.dev/privkey.pem;
+    root /home/htdev/www/herethere.dev/app/frontend/public;
+    index index.html;
+
+    # Block sensitive files
+    location ~* /(src|node_modules|\.env|\.git|Dockerfile|docker-compose.*\.yml) {
+        deny all;
+        return 403;
+    }
+
+    location / {
+        if ($request_uri !~ "^/(api|auth)/") {
+            return 301 https://herethereloyalty.com; # Replace with your WordPress domain
+        }
+        try_files $uri $uri/ @frontend;
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:4000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /auth/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location @frontend {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+
+server {
+    listen 80;
+    server_name loyalty.herethere.dev;
+    return 301 https://$host$request_uri;
+}
+Show in sidebar
+3. Deploy Development App on dev.herethere.dev
+Goal: Deploy the development frontend and backend in /home/htdev/www/herethere.dev/dev, accessible via dev.herethere.dev, with restricted access to prevent exposure.
+Steps:
+	• Create Directory Structure: 
+bash
+CollapseWrapRun
+Copy
+
+su - htdev
+
+mkdir -p /home/htdev/www/herethere.dev/dev/{frontend,backend}
+	• Clone Repositories: 
+bash
+CollapseWrapRun
+Copy
+
+cd /home/htdev/www/herethere.dev/dev
+
+git clone <dev-frontend-repo> frontend
+
+git clone <dev-backend-repo> backend
+	• Configure Docker Compose: 
+bash
+CollapseWrapRun
+Copy
+
+nano /home/htdev/www/herethere.dev/dev/docker-compose.dev.yml
+yaml
+CollapseWrap
+Copy
+
+version: '3'
+
+services:
+
+  dev-frontend:
+
+    build: ./frontend
+
+    ports:
+
+      - "5000:5000"
+
+    environment:
+
+      - VITE_SHOPIFY_API_KEY=${DEV_SHOPIFY_API_KEY}
+
+      - VITE_APP_URL=https://dev.herethere.dev
+
+    volumes:
+
+      - ./frontend/public:/app/public
+
+  dev-backend:
+
+    build: ./backend
+
+    ports:
+
+      - "6000:6000"
+
+    environment:
+
+      - APP_URL=https://dev.herethere.dev
+
+      - DATABASE_URL=postgres://dev_user:dev_pass@postgres:5432/herethere_dev
+
+      - REDIS_URL=redis://redis:6379
+
+    depends_on:
+
+      - postgres
+
+      - redis
+
+  postgres:
+
+    image: postgres:latest
+
+    environment:
+
+      - POSTGRES_DB=herethere_dev
+
+      - POSTGRES_USER=dev_user
+
+      - POSTGRES_PASSWORD=dev_pass
+
+    volumes:
+
+      - dev_postgres_data:/var/lib/postgresql/data
+
+  redis:
+
+    image: redis:latest
+
+    volumes:
+
+      - dev_redis_data:/data
+
+  bull:
+
+    image: redis:latest
+
+    command: redis-server --appendonly yes
+
+    volumes:
+
+      - dev_bull_data:/data
+
+volumes:
+
+  dev_postgres_data:
+
+  dev_redis_data:
+
+  dev_bull_data:
+	• Set Environment Variables: 
+bash
+CollapseWrapRun
+Copy
+
+nano /home/htdev/www/herethere.dev/dev/.env
+env
+CollapseWrap
+Copy
+
+DEV_SHOPIFY_API_KEY=your_dev_api_key
+	• Secure Frontend: 
+		○ Edit /home/htdev/www/herethere.dev/dev/frontend/src/App.tsx: 
+tsx
+CollapseWrap
+Copy
+
+import { Provider } from "@shopify/app-bridge-react";
+
+import { useEffect } from "react";
+
+
+const config = {
+
+    apiKey: process.env.VITE_SHOPIFY_API_KEY,
+
+    host: new URLSearchParams(window.location.search).get("host"),
+
+    forceRedirect: true,
+
+};
+
+
+function App() {
+
+    useEffect(() => {
+
+        if (!config.host) {
+
+            window.location.href = "https://herethereloyalty.com"; // Replace with your WordPress domain
+
+        }
+
+    }, []);
+
+
+    return (
+
+        <Provider config={config}>
+
+            <div>Merchant Dashboard (Dev)</div>
+
+        </Provider>
+
+    );
+
+}
+		○ Disable source maps in /home/htdev/www/herethere.dev/dev/frontend/vite.config.ts: 
+typescript
+CollapseWrapRun
+Copy
+
+export default defineConfig({
+
+  build: {
+
+    sourcemap: false,
+
+  },
+
+});
+		○ Rebuild: 
+bash
+CollapseWrapRun
+Copy
+
+cd /home/htdev/www/herethere.dev/dev/frontend
+
+npm run build
+	• Secure Backend: 
+		○ Ensure API authentication in /home/htdev/www/herethere.dev/dev/backend/src/main.ts: 
+typescript
+CollapseWrapRun
+Copy
+
+app.useGlobalGuards(new ShopifyAuthGuard());
+	• Start Services: 
+bash
+CollapseWrapRun
+Copy
+
+cd /home/htdev/www/herethere.dev/dev
+
+docker-compose -f docker-compose.dev.yml up -d
+
+docker ps
+	• Configure Nginx with Basic Auth: 
+bash
+CollapseWrapRun
+Copy
+
+sudo nano /etc/nginx/sites-available/dev.herethere.dev
+nginx
+CollapseWrap
+Copy
+
+server {
+
+    listen 443 ssl;
+
+    server_name dev.herethere.dev;
+
+    ssl_certificate /etc/letsencrypt/live/herethere.dev/fullchain.pem;
+
+    ssl_certificate_key /etc/letsencrypt/live/herethere.dev/privkey.pem;
+
+    root /home/htdev/www/herethere.dev/dev/frontend/public;
+
+    index index.html;
+
+
+    # Basic Auth
+
+    auth_basic "Restricted Access";
+
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+
+    # Block sensitive files
+
+    location ~* /(src|node_modules|\.env|\.git|Dockerfile|docker-compose.*\.yml) {
+
+        deny all;
+
+        return 403;
+
+    }
+
+
+    location / {
+
+        if ($request_uri !~ "^/(api|auth)/") {
+
+            return 301 https://herethereloyalty.com; # Replace with your WordPress domain
+
+        }
+
+        try_files $uri $uri/ @frontend;
+
+    }
+
+
+    location /api/ {
+
+        proxy_pass http://localhost:6000/;
+
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+
+        proxy_set_header Connection 'upgrade';
+
+        proxy_set_header Host $host;
+
+        proxy_cache_bypass $http_upgrade;
+
+    }
+
+
+    location /auth/ {
+
+        proxy_pass http://localhost:5000;
+
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+
+        proxy_set_header Connection 'upgrade';
+
+        proxy_set_header Host $host;
+
+        proxy_cache_bypass $http_upgrade;
+
+    }
+
+
+    location @frontend {
+
+        proxy_pass http://localhost:5000;
+
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+
+        proxy_set_header Connection 'upgrade';
+
+        proxy_set_header Host $host;
+
+        proxy_cache_bypass $http_upgrade;
+
+    }
+
+}
+
+
+server {
+
+    listen 80;
+
+    server_name dev.herethere.dev;
+
+    return 301 https://$host$request_uri;
+
+}
+bash
+CollapseWrapRun
+Copy
+
+sudo htpasswd -c /etc/nginx/.htpasswd devuser
+
+sudo ln -s /etc/nginx/sites-available/dev.herethere.dev /etc/nginx/sites-enabled/
+
+sudo nginx -t
+
+sudo systemctl reload nginx
+	• Set Up SSL: 
+bash
+CollapseWrapRun
+Copy
+
+sudo certbot --nginx -d dev.herethere.dev
+	• Add robots.txt: 
+bash
+CollapseWrapRun
+Copy
+
+nano /home/htdev/www/herethere.dev/dev/frontend/public/robots.txt
+text
+CollapseWrap
+Copy
+
+User-agent: *
+
+Disallow: /
+text
+CollapseWrap
+Copy
+
+version: '3'
+services:
+  dev-frontend:
+    build: ./frontend
+    ports:
+      - "5000:5000"
+    environment:
+      - VITE_SHOPIFY_API_KEY=${DEV_SHOPIFY_API_KEY}
+      - VITE_APP_URL=https://dev.herethere.dev
+    volumes:
+      - ./frontend/public:/app/public
+  dev-backend:
+    build: ./backend
+    ports:
+      - "6000:6000"
+    environment:
+      - APP_URL=https://dev.herethere.dev
+      - DATABASE_URL=postgres://dev_user:dev_pass@postgres:5432/herethere_dev
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+  postgres:
+    image: postgres:latest
+    environment:
+      - POSTGRES_DB=herethere_dev
+      - POSTGRES_USER=dev_user
+      - POSTGRES_PASSWORD=dev_pass
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
+  redis:
+    image: redis:latest
+    volumes:
+      - dev_redis_data:/data
+  bull:
+    image: redis:latest
+    command: redis-server --appendonly yes
+    volumes:
+      - dev_bull_data:/data
+volumes:
+  dev_postgres_data:
+  dev_redis_data:
+  dev_bull_data:
+Show in sidebar
+text
+CollapseWrap
+Copy
+
+server {
+    listen 443 ssl;
+    server_name dev.herethere.dev;
+    ssl_certificate /etc/letsencrypt/live/herethere.dev/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/herethere.dev/privkey.pem;
+    root /home/htdev/www/herethere.dev/dev/frontend/public;
+    index index.html;
+
+    # Basic Auth
+    auth_basic "Restricted Access";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    # Block sensitive files
+    location ~* /(src|node_modules|\.env|\.git|Dockerfile|docker-compose.*\.yml) {
+        deny all;
+        return 403;
+    }
+
+    location / {
+        if ($request_uri !~ "^/(api|Watson) {
+            return 301 https://herethereloyalty.com; # Replace with your WordPress domain
+        }
+        try_files $uri $uri/ @frontend;
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:6000/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /auth/ {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location @frontend {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+
+server {
+    listen 80;
+    server_name dev.herethere.dev;
+    return 301 https://$host$request_uri;
+}
+Show in sidebar
+text
+CollapseWrap
+Copy
+
+import { Provider } from "@shopify/app-bridge-react";
+import { useEffect } from "react";
+
+const config = {
+    apiKey: process.env.VITE_SHOPIFY_API_KEY,
+    host: new URLSearchParams(window.location.search).get("host"),
+    forceRedirect: true,
+};
+
+function App() {
+    useEffect(() => {
+        if (!config.host) {
+            window.location.href = "https://herethereloyalty.com"; // Replace with your WordPress domain
+        }
+    }, []);
+
+    return (
+        <Provider config={config}>
+            <div>Merchant Dashboard (Dev)</div>
+        </Provider>
+    );
+}
+Show in sidebar
+4. Configure Shopify Partner Dashboard
+	• Production App: 
+		○ App URL: https://loyalty.herethere.dev
+		○ Redirect URLs: https://loyalty.herethere.dev/auth/callback
+		○ Webhook Endpoints: https://loyalty.herethere.dev/api/webhooks
+	• Development App: 
+		○ Create a separate test app: 
+			§ App URL: https://dev.herethere.dev
+			§ Redirect URLs: https://dev.herethere.dev/auth/callback
+			§ Webhook Endpoints: https://dev.herethere.dev/api/webhooks
+		○ Test in a Shopify development store.
+5. Secure Against Search Engine Disclosure
+	• Permissions: 
+bash
+CollapseWrapRun
+Copy
+
+sudo chown -R htdev:htdev /home/htdev/www/herethere.dev
+
+sudo chmod -R 755 /home/htdev/www/herethere.dev/{app,dev}/frontend/public
+
+sudo chmod -R 700 /home/htdev/www/herethere.dev/{app,dev}/{frontend,backend}
+	• Verify robots.txt: 
+		○ Ensure /home/htdev/www/herethere.dev/{app,dev}/frontend/public/robots.txt disallows all: 
+text
+CollapseWrap
+Copy
+
+User-agent: *
+
+Disallow: /
+	• Test Access: 
+bash
+CollapseWrapRun
+Copy
+
+curl -I https://loyalty.herethere.dev
+
+curl -I https://dev.herethere.dev
+Should redirect to your WordPress domain (e.g., https://herethereloyalty.com). 
+bash
+CollapseWrapRun
+Copy
+
+curl -I https://loyalty.herethere.dev/api/points
+Should return 401/403 without authentication.
+6. Transition to Production
+	• Update Production Code: 
+bash
+CollapseWrapRun
+Copy
+
+su - htdev
+
+cd /home/htdev/www/herethere.dev/app
+
+git checkout main
+
+git pull
+
+docker-compose down
+
+docker-compose up -d --build
+	• Backup Database: 
+bash
+CollapseWrapRun
+Copy
+
+docker exec <postgres_container> pg_dump -U user herethere_prod > prod_backup.sql
+	• Test Production: 
+bash
+CollapseWrapRun
+Copy
+
+curl -I https://loyalty.herethere.dev
+
+curl -I https://loyalty.herethere.dev/api/points
+Verify in Shopify admin/storefront.
+7. Additional Notes on WordPress
+	• Since WordPress will be on a separate domain (e.g., herethereloyalty.com), set it up on a different VPS or hosting provider (e.g., SiteGround, WP Engine) or the same VPS with a new domain.
+	• Example Nginx for herethereloyalty.com on the same VPS: 
+bash
+CollapseWrapRun
+Copy
+
+sudo nano /etc/nginx/sites-available/herethereloyalty.com
+nginx
+CollapseWrap
+Copy
+
+server {
+
+    listen 443 ssl;
+
+    server_name herethereloyalty.com;
+
+    ssl_certificate /etc/letsencrypt/live/herethereloyalty.com/fullchain.pem;
+
+    ssl_certificate_key /etc/letsencrypt/live/herethereloyalty.com/privkey.pem;
+
+    root /home/htdev/www/herethereloyalty.com/wordpress;
+
+    index index.php;
+
+
+    location ~* /(wp-config\.php|readme\.html|license\.txt|xmlrpc\.php|\.git) {
+
+        deny all;
+
+        return 403;
+
+    }
+
+
+    location / {
+
+        try_files $uri $uri/ /index.php?$args;
+
+    }
+
+
+    location ~ \.php$ {
+
+        include snippets/fastcgi-php.conf;
+
+        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+
+        include fastcgi_params;
+
+    }
+
+}
+
+
+server {
+
+    listen 80;
+
+    server_name herethereloyalty.com;
+
+    return 301 https://$host$request_uri;
+
+}
+bash
+CollapseWrapRun
+Copy
+
+sudo certbot --nginx -d herethereloyalty.com
+Final Answer
+To deploy your Herethere Loyalty App’s backend and frontend under herethere.dev:
+	• Deploy production app in /home/htdev/www/herethere.dev/app on loyalty.herethere.dev (frontend: localhost:3000, backend: localhost:4000).
+	• Deploy development app in /home/htdev/www/herethere.dev/dev on dev.herethere.dev (frontend: localhost:5000, backend: localhost:6000).
+	• Use Docker Compose to manage microservices (frontend, backend, PostgreSQL, Redis, Bull).
+	• Secure against search engine disclosure with robots.txt, Nginx restrictions, disabled source maps, and basic auth for dev.herethere.dev.
+	• Redirect direct access to herethereloyalty.com (or your WordPress domain).
+	• Use sudo su - for root access to configure Nginx, Docker, and permissions.
+	• Test with curl and Shopify admin/storefront.
+Your WordPress site on a separate domain (e.g., herethereloyalty.com) can be set up independently. Provide the WordPress domain or VPS details if you need setup assistance. If you need specific repository URLs or additional configurations, let me know!
+
+
+### 5. Configure Shopify Partner Dashboard
+1. **Update App URLs**:
+   - In Shopify Partner Dashboard, go to your app (Herethere Loyalty App).
+   - Set **App URL**: `https://dev.herethere.app`
+   - Set **Redirection URL**: `https://dev.herethere.app/auth/callback`
+2. **Register Webhooks**:
+   - Add webhook endpoints (e.g., `https://dev.herethere.app/api/webhooks/orders/create` for points tracking).
+   - Use Shopify’s `@shopify/shopify-api` in NestJS to validate webhook signatures.
+3. **Test OAuth and Webhooks**:
+   - Install the app on a development store.
+   - Verify OAuth flow: Access `https://dev.herethere.app/auth` and complete authentication.
+   - Test webhooks: Use Shopify’s webhook simulator or trigger events (e.g., place an order).
+
+### 6. Deploy and Test
+1. **Deploy to VPS**:
+   - Push code to Git: `git push origin main`
+   - Pull on VPS: `cd ~/herethere && git pull`
+   - Rebuild and restart: `docker-compose down && docker-compose up --build -d`
+2. **Verify Services**:
+   - Check containers: `docker ps`
+   - Check logs: `docker logs herethere-backend`, `docker logs herethere-frontend`
+   - Test endpoints: `curl https://dev.herethere.app` (frontend), `curl -u username:password https://dev.herethere.app/api/health` (backend)
+3. **Test Shopify Integration**:
+   - Verify OAuth flow works.
+   - Confirm webhooks are received (check logs or use a `/api/webhooks/test` endpoint).
+   - Test POS integration and SMS referrals (via Twilio) in a development store.
+
+### 7. Secure and Monitor
+1. **Secure Sensitive Data**:
+   - Ensure PostgreSQL and Redis are not publicly accessible (use Docker `internal` network).
+   - Store secrets in `.env` and restrict access: `chmod 600 .env`
+2. **Back Up Database**:
+   - Schedule backups: `docker exec herethere-db pg_dump -U user herethere > backup.sql`
+   - Store backups securely (e.g., copy to another server or cloud storage).
+3. **Monitor Resources**:
+   - Check resource usage: `htop` or `docker stats`
+   - Monitor logs: `docker logs -f herethere-backend`
+4. **Limit Access**:
+   - Use Nginx basic auth or IP whitelisting for beta testers.
+   - Only install on development stores or up to 10 merchant stores to maintain development status.

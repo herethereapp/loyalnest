@@ -1,9 +1,9 @@
 ```
-Herethere Loyalty App ASCII Wireframes
+LoyalNest App ASCII Wireframes
 
 Merchant Dashboard: Welcome Page (Phase 1)
 +-----------------------------+
-| Welcome to Herethere Loyalty |
+| Welcome to LoyalNest |
 +-----------------------------+
 | [Login: Shopify OAuth]      |
 +-----------------------------+
@@ -233,7 +233,7 @@ Merchant Dashboard: Bonus Campaigns (Phase 3)
 
 Customer Widget (Phase 1, 2, 3)
 +-----------------------------+
-| Herethere Loyalty Widget    |
+| LoyalNest Widget    |
 +-----------------------------+
 | [Login: Shopify OAuth]      |
 | [Mobile: Collapsed Widget]  |

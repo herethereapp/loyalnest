@@ -1,5 +1,5 @@
 {
-  "name": "tvp-herethere",
+  "name": "LoyalNest",
   "version": "1.0.0",
   "description": "A monorepo for a Shopify app with NestJS backend and Vite+React frontend, using PostgreSQL and Redis.",
   "private": true,
@@ -107,7 +107,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/herethereapp/tvp-herethere.git"
+    "url": "git+https://github.com/herethereapp/loyalnest.git"
   },
   "keywords": [
     "shopify",
@@ -119,8 +119,8 @@
   ],
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/herethereapp/tvp-herethere/issues"
+    "url": "https://github.com/herethereapp/loyalnest/issues"
   },
-  "homepage": "https://github.com/herethereapp/tvp-herethere#readme",
+  "homepage": "https://github.com/herethereapp/loyalnest#readme",
   "author": "admin"
 }

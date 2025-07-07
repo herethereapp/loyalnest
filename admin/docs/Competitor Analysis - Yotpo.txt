@@ -87,7 +87,7 @@ Weaknesses
 	• User Complaints: 
 		○ Misleading sales promises during onboarding.
 		○ High cost compared to competitors like Lootly.
-Opportunities for Herethere Loyalty
+Opportunities for LoyalNest
 	• Feature Differentiation: 
 		○ Implement SMS/WhatsApp referral sharing in MVP to surpass Yotpo’s referral weakness.
 		○ Add referral popups post-purchase for higher engagement (unlike Yotpo’s buried referral UI).
@@ -107,9 +107,9 @@ Sources
 	• Third-Party Reviews: analyzify.com, lootly.io, g2.com, tekpon.com
 	• User Feedback: Shopify App Store, G2 reviews
 
-Strategic Recommendations for Herethere Loyalty
+Strategic Recommendations for LoyalNest
 
-Based on Yotpo’s analysis, here’s how Herethere Loyalty can differentiate:
+Based on Yotpo’s analysis, here’s how LoyalNest can differentiate:
 
 	1. Referral Program with SMS Sharing: 
 		○ Yotpo’s referral system lacks SMS/WhatsApp and popups, reducing visibility.
@@ -203,7 +203,7 @@ async fn create_referral(
     let conn = pool.get().expect("Couldn't get DB connection");
     use schema::referrals::dsl::*;
     let referral_code = Uuid::new_v4().to_string()[0..8].to_string();
-    let share_url = format!("https://herethere.com/refer/{}", referral_code);
+    let share_url = format!("https://herethere.dev/refer/{}", referral_code);
     let new_referral = models::NewReferral {
         referral_id: &Uuid::new_v4().to_string(),
         customer_id: &data.customer_id,
@@ -223,7 +223,7 @@ diesel::insert_into(referrals)
             env::var("TWILIO_TOKEN").unwrap(),
             None,
         );
-        let message = format!("Join Herethere Loyalty and get 10% off! Use code: {}", share_url);
+        let message = format!("Join LoyalNest and get 10% off! Use code: {}", share_url);
         twilio
             .send_message(
                 &env::var("TWILIO_PHONE").unwrap(),

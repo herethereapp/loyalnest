@@ -1,4 +1,4 @@
-To help you avoid failure as a solo beginner developer building the Herethere Loyalty App, I’ll break down Phase 1 from your `roadmap.txt`, `user stories.md` (artifact_id: 70e29c80-cbf4-4ea4-a98a-d486a38175f5), `Flow Diagram.txt` (artifact_id: 8c912ecc-4496-4729-8c52-364960837e9c), `Wireframes.txt` (artifact_id: 049937ce-3edc-4477-80e9-30603aaf8827), and `tech stack summary.txt` (artifact_id: 25814912-0215-4c04-b110-daece67f1d09) into a 6-week task plan. This aligns with your tech stack (NestJS, Vite + React, PostgreSQL, Redis, Shopify integrations) and focuses on delivering a Minimum Viable Product (MVP) for Phase 1, covering points earning/redemption, basic referrals, merchant dashboard, customer widget, and admin module basics, as well as GDPR compliance and Shopify App Store requirements. The plan is designed for a beginner, leveraging AI assistance (e.g., Grok, GitHub Copilot) and your Docker setup (artifact_id: 694141e2-6b28-4007-a43a-fa3ef1a49eec), with tasks prioritized to ensure usability, scalability (100–5,000 customers, 1,000 orders/hour), and compliance.
+To help you avoid failure as a solo beginner developer building the LoyalNest App, I’ll break down Phase 1 from your `roadmap.txt`, `user stories.md` (artifact_id: 70e29c80-cbf4-4ea4-a98a-d486a38175f5), `Flow Diagram.txt` (artifact_id: 8c912ecc-4496-4729-8c52-364960837e9c), `Wireframes.txt` (artifact_id: 049937ce-3edc-4477-80e9-30603aaf8827), and `tech stack summary.txt` (artifact_id: 25814912-0215-4c04-b110-daece67f1d09) into a 6-week task plan. This aligns with your tech stack (NestJS, Vite + React, PostgreSQL, Redis, Shopify integrations) and focuses on delivering a Minimum Viable Product (MVP) for Phase 1, covering points earning/redemption, basic referrals, merchant dashboard, customer widget, and admin module basics, as well as GDPR compliance and Shopify App Store requirements. The plan is designed for a beginner, leveraging AI assistance (e.g., Grok, GitHub Copilot) and your Docker setup (artifact_id: 694141e2-6b28-4007-a43a-fa3ef1a49eec), with tasks prioritized to ensure usability, scalability (100–5,000 customers, 1,000 orders/hour), and compliance.
 
 ### Phase 1 Overview
 **Features (from `roadmap.txt` and `user stories.md`)**:
@@ -30,7 +30,7 @@ To help you avoid failure as a solo beginner developer building the Herethere Lo
 **Goal**: Set up the development environment, repository, and database to support core features.
 **Tasks**:
 1. **Set Up Repository**:
-   - Initialize Git repository: `git init herethere-loyalty-app`.
+   - Initialize Git repository: `git init LoyalNest-app`.
    - Create `backend/`, `frontend/`, `docs/` folders.
    - Add `.gitignore` (ignore `node_modules`, `.env`, `dist`).
    - Push to GitHub: `git push origin main`.
@@ -138,7 +138,7 @@ To help you avoid failure as a solo beginner developer building the Herethere Lo
      ```jsx
      import { Page, FormLayout, Checkbox } from '@shopify/polaris';
      const WelcomePage = () => (
-       <Page title="Welcome to Herethere Loyalty">
+       <Page title="Welcome to LoyalNest">
          <FormLayout>
            <Checkbox label="Launch Program" />
            <Checkbox label="Add Widget to Theme" />
@@ -341,7 +341,7 @@ To help you avoid failure as a solo beginner developer building the Herethere Lo
 3. **Deploy to VPS**:
    - Follow Docker instructions: `docker-compose up -d --build`.
    - Obtain SSL certificate: `docker-compose run --rm certbot`.
-   - Verify: Access `https://herethere.example.com` and check logs (`docker-compose logs`).
+   - Verify: Access `https://herethere.dev` and check logs (`docker-compose logs`).
 4. **Beta Merchant Feedback**:
    - Share demo URL with 1–2 merchants.
    - Collect feedback on usability (e.g., “Is the Points Program page clear?”).
@@ -353,7 +353,7 @@ To help you avoid failure as a solo beginner developer building the Herethere Lo
    - Access Grafana (`http://your-vps-ip:3001`) to monitor API performance.
    - Set up PostgreSQL backup cron job:
      ```bash
-     echo "0 2 * * * docker exec herethere_postgres_1 pg_dump -U user herethere > /backups/backup-$(date +%F).sql" | crontab -
+     echo "0 2 * * * docker exec LoyalNest_postgres_1 pg_dump -U user LoyalNest > /backups/backup-$(date +%F).sql" | crontab -
      ```
 7. **Document Final MVP**:
    - Finalize `docs/api.md`, `docs/frontend.md`, `docs/admin.md`.

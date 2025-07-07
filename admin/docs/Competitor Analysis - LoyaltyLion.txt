@@ -31,7 +31,7 @@ Strengths
 
 Robust Feature Set: Comprehensive loyalty tools, including tiered programs, referrals, and gamification, suitable for small to enterprise-level stores.
 Integrations: Extensive ecosystem (50+ tools) enhances omnichannel and marketing capabilities, particularly with Klaviyo.
-Analytics: Detailed dashboards provide actionable insights, aligning with Herethere’s goal for advanced analytics.
+Analytics: Detailed dashboards provide actionable insights, aligning with LoyalNest’s goal for advanced analytics.
 Shopify POS Support: Strong omnichannel capabilities with POS integration, addressing a Smile.io limitation noted in the Project Plan.
 Reputation: Long track record (10+ years), #1 G2 rating, and case studies (e.g., Astrid and Miyu’s 50,000 signups) build trust.
 
@@ -47,9 +47,9 @@ User Feedback
 Positive: Merchants praise ease of setup, customization, and impact on retention. Shopify POS integration and gamification (badges, leaderboards) boost engagement.
 Negative: High costs for premium features and limited analytics in lower plans frustrate smaller merchants. Onboarding can be complex for non-technical users.
 
-Differentiation Opportunities for Herethere
+Differentiation Opportunities for LoyalNest
 
 Pricing: Offer more competitive pricing (e.g., $29/month as per Project Plan) with key features in lower tiers to attract small businesses.
 Simplicity: Design a simpler UI/UX for non-technical users, unlike LoyaltyLion’s potentially overwhelming feature set.
-Analytics: Match LoyaltyLion’s advanced analytics but include them in lower plans, aligning with Herethere’s USP of enhanced analytics.
-Innovation: Emphasize frequent updates (like Rivo’s weekly releases) to position Herethere as a modern alternative.
+Analytics: Match LoyaltyLion’s advanced analytics but include them in lower plans, aligning with LoyalNest’s USP of enhanced analytics.
+Innovation: Emphasize frequent updates (like Rivo’s weekly releases) to position LoyalNest as a modern alternative.

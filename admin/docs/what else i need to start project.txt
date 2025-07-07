@@ -1,4 +1,4 @@
-Thank you for sharing the progress on your Herethere Loyalty App project. You’ve made significant strides by securing a Project Plan, Roadmap, Tech Stack Summary, Internal Admin Module, RFM Plan, Study Plan, and Competitor Research Report. These documents provide a solid foundation for building a Shopify loyalty app focused on points, SMS referrals, basic RFM analytics, and POS integration within a 6–8-month timeline for a production-grade TVP. As a solo beginner developer with AI assistance, you’re well-prepared, but there are a few additional elements and steps needed to kick off development effectively and minimize risks. Below, I’ll outline what else you need to start the project, focusing on practical, actionable items to ensure a smooth launch while aligning with your existing plans and limited experience.
+Thank you for sharing the progress on your LoyalNest App project. You’ve made significant strides by securing a Project Plan, Roadmap, Tech Stack Summary, Internal Admin Module, RFM Plan, Study Plan, and Competitor Research Report. These documents provide a solid foundation for building a Shopify loyalty app focused on points, SMS referrals, basic RFM analytics, and POS integration within a 6–8-month timeline for a production-grade TVP. As a solo beginner developer with AI assistance, you’re well-prepared, but there are a few additional elements and steps needed to kick off development effectively and minimize risks. Below, I’ll outline what else you need to start the project, focusing on practical, actionable items to ensure a smooth launch while aligning with your existing plans and limited experience.
 
 What Else You Need to Start the Project
 
@@ -10,18 +10,18 @@ What You Need:
 
 	• Local Setup: 
 		○ Install tools: Node.js (v18+), Docker, Rust, and Git (instructions in Tech Stack Instructions).
-		○ Set up NestJS (nest new herethere-backend), Vite + React (npm create vite@latest herethere-frontend), and PostgreSQL/Redis via Docker: 
+		○ Set up NestJS (nest new LoyalNest-backend), Vite + React (npm create vite@latest LoyalNest-frontend), and PostgreSQL/Redis via Docker: 
 bash
 CollapseWrapRun
 Copy
-docker run -d -p 5432:5432 -e POSTGRES_USER=user -e POSTGRES_PASSWORD=password -e POSTGRES_DB=herethere postgres
+docker run -d -p 5432:5432 -e POSTGRES_USER=user -e POSTGRES_PASSWORD=password -e POSTGRES_DB=LoyalNest postgres
 docker run -d -p 6379:6379 redis
 		○ Clone your GitHub repository: git clone <your-repo-url> or initialize one (git init, git remote add origin <url>).
 		○ Install Shopify CLI: npm install -g @shopify/cli for Rust Functions and app development.
 	• Cloud Setup: 
 		○ Rent a VPS (e.g., DigitalOcean $5/month, 1GB RAM) for staging/deployment.
 		○ Configure VPS with Ubuntu, Docker, Nginx, and Git (per Tech Stack Instructions Week 7–8).
-		○ Set up a domain (e.g., herethere.com) via Namecheap or Cloudflare for testing (e.g., app.herethere.com for Shopify app, admin.herethere.com for admin module).
+		○ Set up a domain (e.g., herethere.dev) via Namecheap or Cloudflare for testing (e.g., app.herethere.dev for Shopify app, admin.herethere.dev for admin module).
 	• IDE: Use VS Code with extensions (Prettier, ESLint, Rust Analyzer, Docker) for code formatting and AI tools (GitHub Copilot, Cursor).
 
 Action Steps:
@@ -86,12 +86,12 @@ AI Assistance: Ask for “Draft an Upwork job post for Polaris UI designer” or
 
 4. Initial Database Schema Implementation
 
-Why: Your Roadmap Month 1 Sprint requires applying herethere_full_schema.sql to PostgreSQL for tables (merchants, customers, points_transactions) and JSONB fields (rfm_score, rfm_thresholds). This ensures your APIs work from the start.
+Why: Your Roadmap Month 1 Sprint requires applying loyalnest_full_schema.sql to PostgreSQL for tables (merchants, customers, points_transactions) and JSONB fields (rfm_score, rfm_thresholds). This ensures your APIs work from the start.
 
 What You Need:
 
 	• Schema Application: 
-		○ Run herethere_full_schema.sql (provided in prior responses) in your PostgreSQL instance.
+		○ Run loyalnest_full_schema.sql (provided in prior responses) in your PostgreSQL instance.
 		○ Add indexes (e.g., CREATE INDEX ON customers (email, merchant_id)).
 	• TypeORM/Prisma Setup: 
 		○ Integrate TypeORM in NestJS to interact with tables (e.g., PointsTransaction entity).
@@ -101,11 +101,11 @@ What You Need:
 Action Steps:
 
 	1. Run PostgreSQL via Docker (Week 3, per Tech Stack Instructions).
-	2. Apply herethere_full_schema.sql using pgAdmin or psql (1 day).
+	2. Apply loyalnest_full_schema.sql using pgAdmin or psql (1 day).
 	3. Set up TypeORM in NestJS with entities for key tables (1 day, use my prior points-transaction.entity.ts).
 	4. Insert test data via SQL or a NestJS script (1 day).
 
-AI Assistance: Request “Generate TypeORM entities for herethere_full_schema.sql” or “Write a SQL script to seed test customers.”
+AI Assistance: Request “Generate TypeORM entities for loyalnest_full_schema.sql” or “Write a SQL script to seed test customers.”
 
 5. API Key/Secret Management
 
@@ -122,7 +122,7 @@ SHOPIFY_API_KEY=your_shopify_key
 SHOPIFY_API_SECRET=your_shopify_secret
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
-DATABASE_URL=postgres://user:password@localhost:5432/herethere
+DATABASE_URL=postgres://user:password@localhost:5432/LoyalNest
 REDIS_URL=redis://localhost:6379
 		○ Use dotenv in NestJS: npm install @nestjs/config dotenv.
 	• Secret Management: 
@@ -132,7 +132,7 @@ REDIS_URL=redis://localhost:6379
 
 Action Steps:
 
-	1. Create .env in herethere-backend with Shopify/Twilio keys (1 hour).
+	1. Create .env in loyalnest-backend with Shopify/Twilio keys (1 hour).
 	2. Configure @nestjs/config to load .env (1 hour, use my prior setup example).
 	3. Sign up for Twilio, buy a phone number, and test SMS locally (1 day).
 	4. Ensure .env is in .gitignore before committing.
@@ -150,7 +150,7 @@ What You Need:
 		○ Post in Shopify Partner Slack or LinkedIn groups.
 	• Outreach Template: 
 		○ Craft a message offering free access to the 300-order plan in exchange for feedback.
-		○ Example: “Hi, I’m building Herethere, a Shopify loyalty app with free RFM analytics and SMS referrals. Join our beta to get free access for 3 months! DM me to discuss.”
+		○ Example: “Hi, I’m building LoyalNest, a Shopify loyalty app with free RFM analytics and SMS referrals. Join our beta to get free access for 3 months! DM me to discuss.”
 	• Feedback Form: Create a Google Form for beta testers to report on RFM usability, referral conversion, and bugs (by Month 2).
 
 Action Steps:
@@ -177,7 +177,7 @@ What You Need:
 Action Steps:
 
 	1. Set up a Notion board with Roadmap tasks, grouped by month (1 hour).
-	2. Add Month 1 Sprint tasks (e.g., “Apply herethere_full_schema.sql”, “Test OAuth”) (1 hour).
+	2. Add Month 1 Sprint tasks (e.g., “Apply loyalnest_full_schema.sql”, “Test OAuth”) (1 hour).
 	3. Install Toggl to track coding/learning time (30 minutes).
 	4. Upload all documents to Notion/Google Drive (30 minutes).
 
@@ -212,7 +212,7 @@ Need	Description	Timeline	Action Owner
 Dev Environment	Local (NestJS, React, Docker) and VPS setup	Week 1–2	You
 Shopify Account	Partner account, test store, app config	Week 1	You
 Freelancer Contracts	UI/UX ($2,500), QA ($2,500)	Week 3–4 (UI), Month 3 (QA)	You
-Database Schema	Apply herethere_full_schema.sql, TypeORM setup	Week 3	You
+Database Schema	Apply loyalnest_full_schema.sql, TypeORM setup	Week 3	You
 API Key Management	Shopify/Twilio keys in .env, Twilio number	Week 2	You
 Beta Tester Plan	Recruit 5–10 merchants via Reddit/Discord	Week 1–Month 2	You
 Project Management	Notion for tasks, Toggl for time	Week 1	You
@@ -244,7 +244,7 @@ Next Steps
 		○ Start Study Plan Week 1: Watch “NestJS Crash Course” and build points API (2 days).
 	2. Week 2: 
 		○ Set up .env with Shopify/Twilio keys, test Twilio SMS (1 day).
-		○ Apply herethere_full_schema.sql and TypeORM entities (1 day).
+		○ Apply loyalnest_full_schema.sql and TypeORM entities (1 day).
 		○ Draft UI/UX freelancer job post, share on Upwork (1 day).
 	3. Ongoing: 
 		○ Commit code daily to GitHub.

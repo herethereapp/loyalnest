@@ -1,8 +1,8 @@
-Below is a comprehensive instruction guide for setting up and using Docker in your Herethere Loyalty App project, tailored to your tech stack as outlined in the updated tech stack summary.txt (artifact_id: 25814912-0215-4c04-b110-daece67f1d09). The guide is designed for a solo beginner developer deploying on a VPS (Ubuntu) with NestJS (backend), Vite + React (frontend), PostgreSQL (database), Redis (caching), and Bull (queue), as specified in your project requirements. It includes a Dockerfile for the NestJS backend, a Dockerfile for the React frontend, and a docker-compose.yml to orchestrate all services, ensuring scalability (100–50,000+ customers, 1,000 orders/hour), security (Let’s Encrypt SSL, pgcrypto), and integration with Shopify, Twilio, SendGrid, and PostHog. The instructions also cover deployment, testing, and monitoring (Prometheus/Grafana), aligning with schema.sql, user stories.md, Flow Diagram.txt, and Wireframes.txt.
+Below is a comprehensive instruction guide for setting up and using Docker in your LoyalNest App project, tailored to your tech stack as outlined in the updated tech stack summary.txt (artifact_id: 25814912-0215-4c04-b110-daece67f1d09). The guide is designed for a solo beginner developer deploying on a VPS (Ubuntu) with NestJS (backend), Vite + React (frontend), PostgreSQL (database), Redis (caching), and Bull (queue), as specified in your project requirements. It includes a Dockerfile for the NestJS backend, a Dockerfile for the React frontend, and a docker-compose.yml to orchestrate all services, ensuring scalability (100–50,000+ customers, 1,000 orders/hour), security (Let’s Encrypt SSL, pgcrypto), and integration with Shopify, Twilio, SendGrid, and PostHog. The instructions also cover deployment, testing, and monitoring (Prometheus/Grafana), aligning with schema.sql, user stories.md, Flow Diagram.txt, and Wireframes.txt.
 
 The artifact is a single docker-compose.yml file, as it encapsulates the core configuration for Dockerizing your project, with detailed instructions provided in the response for context and usage. The artifact uses a new UUID since it’s a distinct addition to your project documentation.
 
-Docker Instructions for Herethere Loyalty App
+Docker Instructions for LoyalNest App
 
 Overview
 Docker containerizes your application’s services (NestJS, React, PostgreSQL, Redis, Bull) into isolated, reproducible environments, simplifying deployment on your Ubuntu VPS. Docker Compose orchestrates these services, ensuring they communicate effectively (e.g., NestJS queries PostgreSQL, uses Redis for caching). This guide provides step-by-step instructions to:
@@ -14,7 +14,7 @@ Deploy, test, and monitor the app, supporting Shopify OAuth, webhooks, and integ
 Address scalability (Bull queues, Redis caching, PostgreSQL partitioning) and security (Let’s Encrypt, pgcrypto, RBAC).
 
 Prerequisites
-VPS: Ubuntu 22.04 or later, with SSH access and a domain (e.g., herethere.example.com).
+VPS: Ubuntu 22.04 or later, with SSH access and a domain.
 Tools: Git, Node.js (for local development), and a code editor (e.g., VS Code).
 Project Setup: Repository with NestJS backend (/backend), Vite + React frontend (/frontend), and schema.sql for PostgreSQL.
 API Keys: Shopify App credentials (client ID, secret), Twilio SID/auth token, SendGrid API key, PostHog API key.
@@ -56,7 +56,7 @@ Create the following structure in your project repository:
 
 text
 
-herethere-loyalty-app/
+LoyalNest-app/
 ├── backend/                # NestJS backend
 │   ├── src/
 │   ├── package.json
@@ -126,16 +126,16 @@ nginx
 
 server {
     listen 80;
-    server_name herethere.example.com;
+    server_name herethere.dev;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
-    server_name herethere.example.com;
+    server_name herethere.dev;
 
-    ssl_certificate /etc/letsencrypt/live/herethere.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/herethere.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/herethere.dev/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/herethere.dev/privkey.pem;
 
     location / {
         root /usr/share/nginx/html;
@@ -196,8 +196,8 @@ bash
 
 
 
-git clone https://github.com/your-repo/herethere-loyalty-app.git
-cd herethere-loyalty-app
+git clone https://github.com/your-repo/LoyalNest-app.git
+cd LoyalNest-app
 
 Copy .env:
 bash
@@ -215,9 +215,9 @@ bash
 
 docker-compose run --rm certbot
 Access Services:
-App: https://herethere.example.com
+App: https://herethere.dev
 Grafana: http://your-vps-ip:3001 (login: admin/admin)
-Backend APIs: https://herethere.example.com/api/*
+Backend APIs: https://herethere.dev/api/*
 
 Verify Logs:
 bash
@@ -261,7 +261,7 @@ export let options = {
 };
 
 export default function () {
-  http.post('https://herethere.example.com/api/points/earn', JSON.stringify({
+  http.post('https://herethere.dev/api/points/earn', JSON.stringify({
     customer_id: 'test-customer',
     order_amount: 100,
   }), {
@@ -281,7 +281,7 @@ import 'cypress-axe';
 
 describe('Customer Widget', () => {
   it('is accessible', () => {
-    cy.visit('https://herethere.example.com');
+    cy.visit('https://herethere.dev');
     cy.injectAxe();
     cy.checkA11y();
   });
@@ -328,7 +328,7 @@ jobs:
       - name: Deploy to VPS
         run: |
           ssh user@your-vps-ip << 'EOF'
-            cd ~/herethere-loyalty-app
+            cd ~/LoyalNest-app
             git pull
             docker-compose down
             docker-compose up -d --build
@@ -375,7 +375,7 @@ Test APIs with Postman (e.g., POST https://localhost/api/points/earn).
 Develop React components with Vite’s HMR (npm run dev in frontend/).
 
 Demo:
-Share https://herethere.example.com with beta merchants to validate UX.
+Share https://herethere.dev with beta merchants to validate UX.
 Include in Shopify App Store submission with Wireframes.txt screenshots.
 
 Documentation:

@@ -1,8 +1,8 @@
 ```markdown
-# Technical Specifications: Herethere Loyalty App
+# Technical Specifications: LoyalNest App
 
 ## Overview
-The Herethere Loyalty App is a Shopify app for small, medium, and Plus merchants (100–50,000+ customers, AOV $20–$500), providing a points-based loyalty program, SMS referrals, RFM segmentation, and analytics. This specification focuses on the points program (e.g., 1000 points for a $100 purchase, 200 points for a 10% discount), referrals, and admin features, aligning with the ERD (`docs/erd/herethere_loyalty.dbml`) and schema (`schema.sql`).
+The LoyalNest App is a Shopify app for small, medium, and Plus merchants (100–50,000+ customers, AOV $20–$500), providing a points-based loyalty program, SMS referrals, RFM segmentation, and analytics. This specification focuses on the points program (e.g., 1000 points for a $100 purchase, 200 points for a 10% discount), referrals, and admin features, aligning with the ERD (`docs/erd/loyalnest.dbml`) and schema (`schema.sql`).
 
 ### Tech Stack
 - **Backend**: NestJS, TypeORM, PostgreSQL (JSONB), Redis (Bull for queues).
@@ -22,7 +22,7 @@ The Herethere Loyalty App is a Shopify app for small, medium, and Plus merchants
   - Shopify Functions (Rust/Wasm) for real-time points calculation (optional for MVP).
 
 ## Database Schema
-Refer to the updated ERD (`docs/erd/herethere_loyalty.dbml`) and `schema.sql`. Key tables:
+Refer to the updated ERD (`docs/erd/loyalnest.dbml`) and `schema.sql`. Key tables:
 - **merchants**: `merchant_id` (PK), `shopify_domain` (UK), `plan_id` (FK to `plans`), `api_token` (encrypted), `status` (CHECK: `'active', 'suspended', 'trial'`), `language` (JSONB), `staff_roles` (JSONB).
 - **customers**: `customer_id` (PK), `merchant_id` (FK), `shopify_customer_id`, `email` (encrypted), `points_balance`, `rfm_score` (JSONB), `vip_tier_id` (FK).
 - **points_transactions**: `transaction_id` (PK), `customer_id` (FK), `merchant_id` (FK), `type` (CHECK: `'earn', 'redeem', 'expire', 'adjust'`), `points`, `order_id`. Partitioned by `merchant_id`.
@@ -479,7 +479,7 @@ async handleDataRequest(@Body() payload: any, @Headers('x-shopify-hmac-sha256') 
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
   await sgMail.send({
     to: customer.email,
-    from: 'support@herethere.app',
+    from: 'support@herethere.dev',
     subject: 'Your Data Request',
     text: JSON.stringify(customerData, null, 2)
   });
@@ -535,7 +535,7 @@ async notifyCustomerEmail(customerId: string, merchantId: string, language: stri
   const queue = new Queue('notifications', process.env.REDIS_URL);
   await queue.add('email', {
     to: customer.email,
-    from: 'support@herethere.app',
+    from: 'support@herethere.dev',
     subject: 'Points Earned',
     text: template.body
   });
@@ -650,23 +650,23 @@ posthog.capture('points_earned', { customer_id, points, merchant_id, order_id })
 ```yaml
 services:
   backend:
-    image: herethere-backend
+    image: LoyalNest-backend
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgres://user:pass@db:5432/herethere
+      - DATABASE_URL=postgres://user:pass@db:5432/LoyalNest
       - REDIS_URL=redis://redis:6379
       - SHOPIFY_API_KEY
       - TWILIO_SID
       - SENDGRID_API_KEY
   frontend:
-    image: herethere-frontend
+    image: LoyalNest-frontend
     ports:
       - "80:80"
   db:
     image: postgres:13
     environment:
-      - POSTGRES_DB=herethere
+      - POSTGRES_DB=LoyalNest
   redis:
     image: redis:6
 ```

@@ -1,4 +1,4 @@
-# Updated Project Plan: Herethere Loyalty App for Shopify
+# Updated Project Plan: LoyalNest App for Shopify
 
 ## Objective
 Develop a Shopify app delivering a customizable, user-friendly loyalty and rewards program to boost customer retention, repeat purchases, and brand loyalty, competing with Smile.io, Yotpo, and LoyaltyLion. Key differentiators include RFM segmentation in all plans, affordable pricing ($29/month for 500 orders), SMS-driven referrals via Twilio, lightweight gamification, multilingual support, and broad POS support. Deliver a production-grade TVP in 7–8 months, focusing on Must Have features (points, SMS referrals, basic RFM analytics, Shopify POS integration, checkout extensions), with Should Have and Could Have features phased in later, using AI-driven development for efficiency and addressing Shopify Plus enterprise needs.
@@ -23,7 +23,7 @@ Develop a Shopify app delivering a customizable, user-friendly loyalty and rewar
   - Use Rust/Wasm for Shopify Functions (discounts, checkout extensions, basic RFM score updates) for performance.
   - Consolidate database to PostgreSQL with JSONB for RFM/tier configs (e.g., program_settings.rfm_thresholds, vip_tiers.rfm_criteria).
   - Add Redis for caching points, referrals, RFM scores, and webhook idempotency keys to support 5,000+ customers (50,000+ for Plus).
-  - Apply herethere_full_schema.sql with indexes on customers(email, merchant_id, rfm_score), points_transactions(customer_id), referrals(merchant_id), vip_tiers(merchant_id).
+  - Apply loyalnest_full_schema.sql with indexes on customers(email, merchant_id, rfm_score), points_transactions(customer_id), referrals(merchant_id), vip_tiers(merchant_id).
   - Deploy on a VPS (Ubuntu with Docker) using Docker Compose and GitHub Actions for CI/CD.
   - Leverage AI (GitHub Copilot, Cursor) for NestJS APIs, Rust Functions, React components, Jest/Cypress tests, and PostgreSQL index recommendations, with human review.
 - **USPs**:
@@ -75,7 +75,7 @@ Develop a Shopify app delivering a customizable, user-friendly loyalty and rewar
 - **Technical Architecture**:
   - Tech stack: Vite + React with Polaris, Tailwind CSS, App Bridge; NestJS for APIs; Rust/Wasm for Shopify Functions; PostgreSQL (JSONB); Redis for caching.
   - APIs: /v1/api/points (earn/redeem), /v1/api/referral (SMS/email via Twilio), /v1/api/rfm/segments (basic RFM), /v1/api/rfm/config (advanced RFM, Phase 3), /admin/* (merchant management with RBAC).
-  - Schema: Use herethere_full_schema.sql with customers.rfm_score (JSONB), program_settings.rfm_thresholds (JSONB), merchants.staff_roles (JSONB for RBAC), and indexes.
+  - Schema: Use loyalnest_full_schema.sql with customers.rfm_score (JSONB), program_settings.rfm_thresholds (JSONB), merchants.staff_roles (JSONB for RBAC), and indexes.
   - Shopify integration: OAuth via @shopify/shopify-app-express, orders/create webhook for points and RFM updates, POS for points earning, Checkout UI Extensions for points redemption.
   - Use AI for NestJS API boilerplate, React components, Jest/Cypress tests, and PostgreSQL index optimization.
 - **Feature Prioritization**:

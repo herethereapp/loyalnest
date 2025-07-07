@@ -1,5 +1,5 @@
 # Roadmap
-Herethere Loyalty App
+LoyalNest App
 
 ## Phase 1: TVP Development + Internal Admin Module (7 Months)
 
@@ -110,7 +110,7 @@ Build a production-grade TVP with **Must Have** features: points earning/redempt
    - Admin frontend: Dashboard, merchants, logs, multi-user roles.
    - Use AI for components, Cypress tests; outsource Polaris compliance review ($1,000).
 4. **Database**:
-   - Apply `herethere_full_schema.sql` with JSONB for `rfm_score`, `rfm_thresholds`, `staff_roles`, `language`, `branding`.
+   - Apply `loyalnest_full_schema.sql` with JSONB for `rfm_score`, `rfm_thresholds`, `staff_roles`, `language`, `branding`.
    - Add indexes and partition `points_transactions`, `referrals` for Plus-scale performance.
    - Use AI for SQL optimization.
 5. **Deployment**:
@@ -379,7 +379,7 @@ Scale for 5,000+ merchants (50,000+ customers for Plus), achieve Built for Shopi
 
 ## Next Steps
 - **Month 1 Sprint**:
-  - Set up PostgreSQL with `herethere_full_schema.sql` (JSONB fields, indexes, partitioning).
+  - Set up PostgreSQL with `loyalnest_full_schema.sql` (JSONB fields, indexes, partitioning).
   - Implement Shopify OAuth using `@shopify/shopify-app-express` and GraphQL Admin/Storefront APIs in NestJS.
   - Generate `/v1/api/points/earn`, `/v1/api/rewards/redeem`, `/v1/api/referrals/create`, `/v1/api/referrals/complete`, `/v1/api/rfm/segments`, `/v1/api/settings/setup` APIs, GraphQL queries, and Jest tests with AI; review manually.
   - Implement webhook signature verification for `orders/create`, GDPR webhooks (`/webhooks/customers/data_request`, `/webhooks/customers/redact`).

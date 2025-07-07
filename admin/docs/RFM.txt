@@ -1,4 +1,4 @@
-To implement the RFM (Recency, Frequency, Monetary) configuration feature for the Herethere Loyalty App, targeting small, medium, and Shopify Plus merchants (100–50,000+ customers, AOV $20–$500), this task list outlines actionable steps using NestJS with TypeScript, Vite + React, Rust with Shopify Functions, PostgreSQL, and Redis. The plan prioritizes a minimum viable feature with iterative improvements, focusing on usability, performance, GDPR compliance, and multilingual support.
+To implement the RFM (Recency, Frequency, Monetary) configuration feature for the LoyalNest App, targeting small, medium, and Shopify Plus merchants (100–50,000+ customers, AOV $20–$500), this task list outlines actionable steps using NestJS with TypeScript, Vite + React, Rust with Shopify Functions, PostgreSQL, and Redis. The plan prioritizes a minimum viable feature with iterative improvements, focusing on usability, performance, GDPR compliance, and multilingual support.
 
 **Task List for Implementing RFM Configuration**
 

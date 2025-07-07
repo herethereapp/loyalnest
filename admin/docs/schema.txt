@@ -1,7 +1,7 @@
 ```sql
 --
 -- PostgreSQL database dump
--- Updated for Herethere Loyalty App with RFM and Admin Module enhancements
+-- Updated for LoyalNest App with RFM and Admin Module enhancements
 --
 
 SET statement_timeout = 0;

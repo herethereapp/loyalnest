@@ -32,13 +32,13 @@ Strengths
 
 Multi-Language Support: Unique ability to display 200+ languages simultaneously, ideal for global Shopify stores.
 Ease of Use: Simple, user-friendly interface praised for straightforward setup, suitable for non-technical merchants.
-Affordable Pricing: Competitive plans ($25-$349/month) with a robust free plan, aligning with Herethere’s goal of affordable pricing.
+Affordable Pricing: Competitive plans ($25-$349/month) with a robust free plan, aligning with LoyalNest’s goal of affordable pricing.
 Social Media Focus: Extensive social media earning rules enhance brand visibility, a differentiator for engagement-driven stores.
 Migration Support: Data import from competitors simplifies switching, a practical advantage.
 
 Weaknesses
 
-Limited Analytics: Analytics are basic compared to LoyaltyLion or Herethere’s planned advanced segmentation, limiting insights for larger stores.
+Limited Analytics: Analytics are basic compared to LoyaltyLion or LoyalNest’s planned advanced segmentation, limiting insights for larger stores.
 Newer Player: Less established than LoyaltyLion, with fewer reviews and a smaller market presence, potentially reducing trust.
 Feature Depth: Lacks advanced features like gamification or complex tiered programs compared to LoyaltyLion.
 Integration Ecosystem: Fewer integrations (e.g., Klaviyo, Shopify Flow) than LoyaltyLion or Rivo, limiting flexibility.
@@ -48,9 +48,9 @@ User Feedback
 Positive: Users appreciate simplicity, multi-language support, and responsive 24/7 support. Effective for boosting sales during events like Black Friday.
 Negative: Some users desire deeper analytics and more integrations. Limited feature depth for complex loyalty programs.
 
-Differentiation Opportunities for Herethere
+Differentiation Opportunities for LoyalNest
 
 Analytics: Offer advanced analytics (e.g., churn risk, segmentation) in all plans, surpassing BON’s basic dashboards.
-Integrations: Expand integration options (e.g., Klaviyo, Yotpo) to match Herethere’s planned ecosystem, outpacing BON’s limited scope.
-Feature Depth: Include gamification and tiered programs in Herethere’s MVP to compete with LoyaltyLion while maintaining BON’s simplicity.
-Market Positioning: Highlight Herethere’s scalability for 5,000+ merchants to build trust compared to BON’s newer status.
+Integrations: Expand integration options (e.g., Klaviyo, Yotpo) to match LoyalNest’s planned ecosystem, outpacing BON’s limited scope.
+Feature Depth: Include gamification and tiered programs in LoyalNest’s MVP to compete with LoyaltyLion while maintaining BON’s simplicity.
+Market Positioning: Highlight LoyalNest’s scalability for 5,000+ merchants to build trust compared to BON’s newer status.

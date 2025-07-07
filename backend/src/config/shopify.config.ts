@@ -5,7 +5,7 @@ export const shopifyConfig = {
   apiSecretKey: process.env.SHOPIFY_API_SECRET,
   scopes: ['read_products', 'write_products'], // Adjust scopes as needed
   hostName: 'localhost:3000',
-  apiVersion: '2024-07',
+  apiVersion: '2024-04',
 };
 
 export const shopify = shopifyApi({

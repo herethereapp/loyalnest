@@ -1,8 +1,8 @@
-Competitor Research Plan for Herethere Loyalty
+Competitor Research Plan for LoyalNest
 
 Objective
 
-Understand the competitive landscape of Shopify loyalty apps to position Herethere Loyalty as a compelling alternative to Smile.io and other players, identifying opportunities to differentiate through features, pricing, integrations, and user experience.
+Understand the competitive landscape of Shopify loyalty apps to position LoyalNest as a compelling alternative to Smile.io and other players, identifying opportunities to differentiate through features, pricing, integrations, and user experience.
 
 Step 1: Identify Key Competitors
 
@@ -31,7 +31,7 @@ Outcome: List of 8-10 competitors with app names, URLs, and brief descriptions.
 
 Step 2: Define Research Categories
 
-Goal: Establish criteria to analyze competitors consistently, focusing on areas critical to Herethere Loyalty’s success.
+Goal: Establish criteria to analyze competitors consistently, focusing on areas critical to LoyalNest’s success.
 
 Categories:
 	1. Features: 
@@ -99,7 +99,7 @@ Outcome: Populated competitor analysis template with data from at least 5 primar
 
 Step 4: Analyze Findings
 
-Goal: Identify trends, gaps, and opportunities to differentiate Herethere Loyalty.
+Goal: Identify trends, gaps, and opportunities to differentiate LoyalNest.
 
 Actions:
 	1. Feature Comparison: 
@@ -114,17 +114,17 @@ Actions:
 	4. Market Positioning: 
 		○ Identify underserved segments (e.g., small businesses needing advanced analytics).
 		○ Evaluate enterprise focus (e.g., Smile.io’s Shopify Plus certification).
-	5. Opportunities for Herethere Loyalty: 
+	5. Opportunities for LoyalNest: 
 		○ Features: Offer advanced analytics on lower tiers (unlike Smile.io).
 		○ Pricing: Provide a free plan with 300 orders/month to beat Smile.io’s 200.
 		○ Integrations: Prioritize SMS/WhatsApp for referrals (unlike Smile.io).
 		○ Admin Module: Leverage your internal admin module for superior merchant oversight, a unique feature not emphasized by competitors.
 		○ Scalability: Optimize Rust backend for 5,000+ merchants, matching Smile.io’s reliability.
-Outcome: SWOT analysis for Herethere Loyalty vs. competitors, with actionable recommendations.
+Outcome: SWOT analysis for LoyalNest vs. competitors, with actionable recommendations.
 
 Step 5: Apply Insights to Development
 
-Goal: Use research to refine Herethere Loyalty’s MVP, internal admin module, and go-to-market strategy.
+Goal: Use research to refine LoyalNest’s MVP, internal admin module, and go-to-market strategy.
 
 Actions:
 	1. MVP Features: 
@@ -133,7 +133,7 @@ Actions:
 		○ Ensure Shopify POS integration for in-store points (like Smile.io, BON).
 	2. Internal Admin Module: 
 		○ Enhance merchant management (e.g., suspend accounts, adjust points) to monitor 5,000+ merchants efficiently.
-		○ Add platform-wide analytics (e.g., total points issued, merchant growth) to track Herethere’s performance, inspired by Smile.io’s reporting.
+		○ Add platform-wide analytics (e.g., total points issued, merchant growth) to track LoyalNest’s performance, inspired by Smile.io’s reporting.
 		○ Implement audit logs (audit_logs) for admin actions, ensuring security not highlighted by competitors.
 	3. Pricing Strategy: 
 		○ Offer a free plan with 300 orders/month, basic points, and 1 integration to attract small businesses.
@@ -149,7 +149,7 @@ Outcome: Updated development roadmap and marketing strategy informed by competit
 
 Step 6: Monitor Competitors Ongoing
 
-Goal: Stay updated on competitor changes to adapt Herethere Loyalty dynamically.
+Goal: Stay updated on competitor changes to adapt LoyalNest dynamically.
 
 Actions:
 	1. Regular Checks: 
@@ -164,7 +164,7 @@ Actions:
 	4. Automated Tools: 
 		○ Use tools like Cassidy_AI’s workflow for real-time competitor tracking (news, reviews, social posts).
 		○ Consider free trials of paid tools (e.g., SEMrush, per @Zeeiny3).
-Outcome: Continuous insights to iterate Herethere Loyalty’s features, pricing, and positioning.
+Outcome: Continuous insights to iterate LoyalNest’s features, pricing, and positioning.
 
 Timeline
 	• Week 1-2: Identify competitors, define research categories, create template.
@@ -183,7 +183,7 @@ Sample Insights (Based on Web Results)
 To illustrate the plan’s output, here are preliminary insights for Smile.io:
 	• Strengths: Easy setup, robust support, Shopify Plus certification, 100,000+ merchants.
 	• Weaknesses: Limited analytics/segmentation, no referral popups, costly Plus plan ($999/month).
-	• Opportunities for Herethere Loyalty: 
+	• Opportunities for LoyalNest: 
 		○ Offer advanced analytics on lower tiers (e.g., segmentation in $39 plan).
 		○ Include SMS/WhatsApp referral sharing in MVP.
 		○ Price free plan at 300 orders/month to beat Smile.io’s 200.

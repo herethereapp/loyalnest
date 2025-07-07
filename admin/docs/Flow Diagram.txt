@@ -216,7 +216,7 @@ graph TD
 
     %% Explanation of Flow Diagram
     **Overview**:
-    - The diagram represents the Herethere Loyalty App's architecture, focusing on points earning, redemption, referrals, VIP tiers, gamification, analytics, and integrations.
+    - The diagram represents the LoyalNest App's architecture, focusing on points earning, redemption, referrals, VIP tiers, gamification, analytics, and integrations.
     - It aligns with `schema.sql`, `user stories.md`, and `Sequence Diagrams.txt`, covering Phases 1–3 for small, medium, and Shopify Plus merchants.
 
     **Key Flows**:

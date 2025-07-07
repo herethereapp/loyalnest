@@ -36,7 +36,7 @@ Market Positioning
 	• Target Audience: Small to mid-sized e-commerce businesses (free/$29-$49 plans), with growing enterprise appeal via custom plans. Focuses on digital-first brands in retail, fintech, and on-demand sectors.
 	• Differentiation: Emphasizes gamification, affordability, and multilingual support to compete with Smile.io (100,000+ merchants, costly plans), Yotpo (2,500+ merchants, review-focused), and BON Loyalty (affordable, multi-language).
 	• Competitive Edge: Combines Gameball’s gamified engagement with BON’s affordability, but lags in POS support and SMS referrals compared to LoyaltyLion and Yotpo.
-Opportunities for Herethere Loyalty App
+Opportunities for LoyalNest App
 	• SMS-Driven Referrals: Integrate Twilio for SMS/WhatsApp referral popups to surpass Gameball’s email/social focus, increasing referral visibility.
 	• Non-Shopify POS Support: Plan Square, Lightspeed, and Clover integrations to address Gameball’s Shopify-centric limitation, appealing to omnichannel merchants.
 	• Dedicated Loyalty Page: Offer an SEO-friendly loyalty page to differentiate from Gameball’s widget-only approach, improving discoverability.
@@ -45,10 +45,10 @@ Opportunities for Herethere Loyalty App
 	• Gamification Balance: Incorporate lightweight gamification (e.g., badges, challenges) in Phase 3 to match Gameball’s appeal without overcomplicating the UI.
 	• Multi-Language Expansion: Match Gameball’s 10+ languages (e.g., English, German, Spanish, French) in Phase 3 to target global markets.
 Threats from Gameball
-	• Gamification Appeal: Gameball’s Spin the Wheel and badges may attract merchants seeking engaging customer experiences, requiring Herethere to add similar features.
+	• Gamification Appeal: Gameball’s Spin the Wheel and badges may attract merchants seeking engaging customer experiences, requiring LoyalNest to add similar features.
 	• Free Plan Competitiveness: Gameball’s robust free plan (200 orders) may draw small businesses, necessitating a competitive 300-order free plan.
-	• Customer Support Benchmark: Gameball’s top-notch support sets a high bar, requiring Herethere to invest in 24/7 email/chat and tutorials.
-	• Rapid Innovation: Gameball’s frequent updates (based on customer requests) challenge Herethere to maintain quarterly feature releases.
+	• Customer Support Benchmark: Gameball’s top-notch support sets a high bar, requiring LoyalNest to invest in 24/7 email/chat and tutorials.
+	• Rapid Innovation: Gameball’s frequent updates (based on customer requests) challenge LoyalNest to maintain quarterly feature releases.
 Sources
 	• Gameball Website: www.gameball.co[](https://www.gameball.co/)
 	• Shopify App Store: apps.shopify.com

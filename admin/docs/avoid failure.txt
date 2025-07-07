@@ -1,4 +1,4 @@
-As a solo beginner developer building the Herethere Loyalty App, you’ve laid a strong foundation with your detailed documentation (`schema.sql`, `user stories.md`, `Flow Diagram.txt`, `Wireframes.txt`, `tech stack summary.txt`, and Docker instructions). These artifacts align with your tech stack (NestJS, Vite + React, PostgreSQL, Redis, Bull, Shopify integrations) and requirements for small to Shopify Plus merchants (100–50,000+ customers, 1,000 orders/hour). However, developing a Shopify app as a solo developer, even with AI assistance (e.g., Grok, GitHub Copilot), poses risks such as scope creep, technical debt, usability issues, and deployment failures. Below, I provide actionable suggestions to avoid failure, focusing on project management, development, testing, deployment, and stakeholder engagement, while leveraging your existing documents and addressing beginner challenges.
+As a solo beginner developer building the LoyalNest App, you’ve laid a strong foundation with your detailed documentation (`schema.sql`, `user stories.md`, `Flow Diagram.txt`, `Wireframes.txt`, `tech stack summary.txt`, and Docker instructions). These artifacts align with your tech stack (NestJS, Vite + React, PostgreSQL, Redis, Bull, Shopify integrations) and requirements for small to Shopify Plus merchants (100–50,000+ customers, 1,000 orders/hour). However, developing a Shopify app as a solo developer, even with AI assistance (e.g., Grok, GitHub Copilot), poses risks such as scope creep, technical debt, usability issues, and deployment failures. Below, I provide actionable suggestions to avoid failure, focusing on project management, development, testing, deployment, and stakeholder engagement, while leveraging your existing documents and addressing beginner challenges.
 
 ---
 
@@ -131,7 +131,7 @@ As a solo beginner developer building the Herethere Loyalty App, you’ve laid a
 
     export let options = { vus: 100, duration: '1m' };
     export default function () {
-      http.post('https://herethere.example.com/api/points/earn', JSON.stringify({
+      http.post('https://herethere.dev/api/points/earn', JSON.stringify({
         customer_id: 'test-customer',
         order_amount: 100,
       }), { headers: { 'Content-Type': 'application/json' } });
@@ -183,7 +183,7 @@ As a solo beginner developer building the Herethere Loyalty App, you’ve laid a
 - **Automate Backups**:
   - Schedule PostgreSQL backups:
     ```bash
-    echo "0 2 * * * docker exec herethere_postgres_1 pg_dump -U user herethere > /backups/backup-$(date +%F).sql" | crontab -
+    echo "0 2 * * * docker exec LoyalNest_postgres_1 pg_dump -U user LoyalNest > /backups/backup-$(date +%F).sql" | crontab -
     ```
 - **Test Deployment Locally**:
   - Run `docker-compose up --build` locally before deploying to VPS to catch configuration errors.
@@ -199,7 +199,7 @@ As a solo beginner developer building the Herethere Loyalty App, you’ve laid a
 
 **Suggestions**:
 - **Engage Beta Merchants Early**:
-  - Recruit 1–2 beta merchants (small/medium stores) to test the MVP (Phase 1: points, referrals). Share `Wireframes.txt` and a demo URL (`https://herethere.example.com`).
+  - Recruit 1–2 beta merchants (small/medium stores) to test the MVP (Phase 1: points, referrals). Share `Wireframes.txt` and a demo URL (`https://herethere.dev`).
   - Collect feedback on usability (e.g., “Is the Points Program page intuitive?”) and prioritize fixes (e.g., simplify redemption options).
 - **Prepare for Shopify App Store**:
   - Ensure Polaris compliance in Merchant Dashboard (`Wireframes.txt`) and GDPR webhook handling (`schema.sql: gdpr_requests`).
@@ -281,7 +281,7 @@ As a solo beginner developer building the Herethere Loyalty App, you’ve laid a
 
 ---
 
-### Specific Recommendations for Herethere Loyalty App
+### Specific Recommendations for LoyalNest App
 1. **Prioritize Phase 1 MVP**:
    - Implement `PointsController`, `CustomerWidget.tsx`, and `PointsPage.tsx` with Shopify OAuth and orders/create webhook.
    - Test with Jest and Cypress to ensure points earning (10 points/$) and redemption (500 points for $5 off) work correctly.

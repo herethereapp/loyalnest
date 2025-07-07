@@ -83,7 +83,7 @@ Weaknesses
 	• User Complaints: 
 		○ Basic plan lacks referral customization (e.g., message editing).
 		○ Analytics too basic on lower tiers, not worth cost.
-Opportunities for Herethere Loyalty
+Opportunities for LoyalNest
 	• Feature Differentiation: 
 		○ Offer SMS/WhatsApp referral sharing with post-purchase popups to surpass Smile.io’s referral weakness.
 		○ Provide advanced analytics (e.g., customer segmentation, referral ROI) on lower tiers ($39 plan).
@@ -103,8 +103,8 @@ Sources
 	• Third-Party Reviews: gameball.co, bloggle.app, capterra.ca
 	• User Feedback: Shopify App Store, G2.com
 
-Strategic Recommendations for Herethere Loyalty
-Based on Smile.io’s analysis, here’s how Herethere Loyalty can differentiate:
+Strategic Recommendations for LoyalNest
+Based on Smile.io’s analysis, here’s how LoyalNest can differentiate:
 	1. Referral Popups with SMS Sharing: 
 		○ Smile.io’s referral program lacks popups and SMS/WhatsApp, reducing visibility.
 		○ Implement post-purchase referral popups with SMS sharing (via Twilio), as shown in the Yotpo analysis (previous response), to drive engagement.
@@ -340,7 +340,7 @@ async fn create_referral(
     let conn = pool.get().expect("Couldn't get DB connection");
     use schema::referrals::dsl::*;
     let referral_code = Uuid::new_v4().to_string()[0..8].to_string();
-    let share_url = format!("https://herethere.com/refer/{}", referral_code);
+    let share_url = format!("https://herethere.dev/refer/{}", referral_code);
     let new_referral = models::NewReferral {
         referral_id: &Uuid::new_v4().to_string(),
         customer_id: &data.customer_id,
@@ -359,7 +359,7 @@ diesel::insert_into(referrals)
             env::var("TWILIO_TOKEN").unwrap(),
             None,
         );
-        let message = format!("Join Herethere Loyalty and get 10% off! Use code: {}", share_url);
+        let message = format!("Join LoyalNest and get 10% off! Use code: {}", share_url);
         twilio
             .send_message(
                 &env::var("TWILIO_PHONE").unwrap(),

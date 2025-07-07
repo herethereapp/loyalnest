@@ -1,4 +1,4 @@
-Herethere Loyalty App Feature Analysis
+LoyalNest App Feature Analysis
 =========================
 
 ## Customer Widget Features (Phase 1, 2, 3)

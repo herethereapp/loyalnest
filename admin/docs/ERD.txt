@@ -1,4 +1,4 @@
-To create an Entity-Relationship Diagram (ERD) for the Herethere Loyalty App based on the updated `schema.sql`, I’ve analyzed the PostgreSQL schema to include all tables, columns, constraints, and relationships, with enhancements for RFM (`RFM.txt`) and Internal Admin Module (`Internal Admin Module.txt`). The ERD is presented in Mermaid `erDiagram` syntax, wrapped in an `<xaiArtifact>` tag, with improvements for scalability, security, and multilingual support.
+To create an Entity-Relationship Diagram (ERD) for the LoyalNest App based on the updated `schema.sql`, I’ve analyzed the PostgreSQL schema to include all tables, columns, constraints, and relationships, with enhancements for RFM (`RFM.txt`) and Internal Admin Module (`Internal Admin Module.txt`). The ERD is presented in Mermaid `erDiagram` syntax, wrapped in an `<xaiArtifact>` tag, with improvements for scalability, security, and multilingual support.
 
 **Schema Analysis**
 

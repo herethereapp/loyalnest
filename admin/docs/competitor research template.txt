@@ -1,4 +1,4 @@
-Competitor Analysis Template for Herethere Loyalty
+Competitor Analysis Template for LoyalNest
 Competitor Name: [e.g., Smile.io]
 Overview
 	• App Name: 
@@ -72,7 +72,7 @@ Weaknesses
 	• Pricing Issues: 
 	• Technical Limitations: 
 	• User Complaints:
-Opportunities for Herethere Loyalty
+Opportunities for LoyalNest
 	• Feature Differentiation: 
 	• Pricing Advantage: 
 	• Integration Focus: 

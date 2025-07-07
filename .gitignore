@@ -66,5 +66,5 @@ coverage/
 *.pid.lock
 frontend-backup/
 conversation-backup/
-
+.vps
 

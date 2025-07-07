@@ -1,5 +1,5 @@
 ```
-Herethere Loyalty App Tech Stack Summary
+LoyalNest App Tech Stack Summary
 
 Backend
 - Framework: NestJS (TypeScript)

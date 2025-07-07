@@ -1,13 +1,13 @@
 # Purpose of the Internal Admin Module
 
-The internal admin module is a centralized, standalone dashboard for the Herethere Loyalty developer team to:
+The internal admin module is a centralized, standalone dashboard for the LoyalNest developer team to:
 - Monitor and manage all merchants, including Shopify Plus (50,000+ customers, 1,000 orders/hour).
 - View aggregated platform analytics (e.g., merchant count, orders, points, RFM segments).
 - Perform administrative actions (e.g., suspend accounts, adjust points, manage plans).
 - Troubleshoot issues via API and audit logs.
 - Ensure GDPR/CCPA compliance and support internal operations without Shopify admin panel reliance.
 
-The module is hosted outside the Shopify embedded app context (e.g., `admin.herethere.com`) with secure authentication (JWT, MFA) and is distinct from the merchant-facing dashboard.
+The module is hosted outside the Shopify embedded app context (e.g., `admin.herethere.dev`) with secure authentication (JWT, MFA) and is distinct from the merchant-facing dashboard.
 
 # Advice for Designing the Internal Admin Module
 
@@ -66,7 +66,7 @@ The module is hosted outside the Shopify embedded app context (e.g., `admin.here
 - **Implementation**: Cache settings in Redis, support multilingual templates.
 
 ## 2. Implementation Approach
-- **Separation**: Host at `admin.herethere.com`, separate from Shopify app.
+- **Separation**: Host at `admin.herethere.dev`, separate from Shopify app.
 - **Authentication**: JWT (1-hour expiry, refresh tokens), MFA for superadmins, bcrypt passwords.
 - **Tech Stack**:
   - **Backend**: NestJS with GraphQL client (`@shopify/shopify-api`), PostgreSQL (partitioned tables), Redis.

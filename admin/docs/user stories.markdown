@@ -1,5 +1,5 @@
 ```markdown
-# Herethere Loyalty App User Stories
+# LoyalNest App User Stories
 
 ## Customer Widget (Phase 1, 2, 3)
 

@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgres://user:password@postgres:5432/herethere
+      - DATABASE_URL=postgres://user:password@postgres:5432/LoyalNest
       - REDIS_URL=redis://redis:6379
       - SHOPIFY_CLIENT_ID=${SHOPIFY_CLIENT_ID}
       - SHOPIFY_CLIENT_SECRET=${SHOPIFY_CLIENT_SECRET}
@@ -55,7 +55,7 @@ services:
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=herethere
+      - POSTGRES_DB=LoyalNest
     volumes:
       - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
       - postgres-data:/var/lib/postgresql/data
@@ -99,7 +99,7 @@ services:
     image: certbot/certbot
     volumes:
       - certbot-data:/etc/letsencrypt
-    entrypoint: certbot certonly --webroot --webroot-path=/etc/letsencrypt --email your-email@example.com --agree-tos --no-eff-email -d herethere.example.com
+    entrypoint: certbot certonly --webroot --webroot-path=/etc/letsencrypt --email your-email@example.com --agree-tos --no-eff-email -d herethere.dev
     depends_on:
       - nginx
     networks:
