@@ -1,0 +1,393 @@
+```mermaid
+graph TD
+    %% Main Sections
+    A[Customer] -->|Interacts with| B[Customer Widget]
+    C[Merchant] -->|Manages via| D[Merchant Dashboard]
+    E[Admin] -->|Manages via| F[Admin Module]
+    G[Backend] -->|Supports| B[Customer Widget]
+    G[Backend] -->|Supports| D[Merchant Dashboard]
+    G[Backend] -->|Supports| F[Admin Module]
+    H[Integrations] -->|Connects to| G[Backend]
+    I[Database: PostgreSQL] -->|Stores/Retrieves| G[Backend]
+    J[Cache: Redis] -->|Optimizes| G[Backend]
+    K[Queue: Bull] -->|Handles Async| G[Backend]
+    L[Analytics: PostHog] -->|Tracks Events| G[Backend]
+
+    %% Customer Widget (Phase 1, 2, 3)
+    subgraph Customer Widget
+        B[Customer Widget] --> B0[App Bridge Auth]
+        B[Customer Widget] --> B1[Points Balance]
+        B[Customer Widget] --> B2[Redemption]
+        B[Customer Widget] --> B3[Referral Popup]
+        B[Customer Widget] --> B4[RFM Nudges]
+        B[Customer Widget] --> B5[VIP Tiers]
+        B[Customer Widget] --> B6[Gamification]
+        B[Customer Widget] --> B7[Multilingual Support]
+        B[Customer Widget] --> B8[Referral Status]
+        B[Customer Widget] --> B9[GDPR Requests]
+        B2[Redemption] --> B2a[Discounts]
+        B2[Redemption] --> B2b[Free Shipping]
+        B2[Redemption] --> B2c[Free Products]
+        B2[Redemption] --> B2d[Coupons]
+        B3[Referral Popup] --> B3a[SMS/Email Referral]
+        B3[Referral Popup] --> B3b[Social Sharing]
+        B4[RFM Nudges] --> B4a[Banner/Popup]
+        B4[RFM Nudges] --> B4b[Dismiss Action]
+        B5[VIP Tiers] --> B5a[Tier Status]
+        B5[VIP Tiers] --> B5b[Perks Display]
+        B6[Gamification] --> B6a[Badges]
+        B6[Gamification] --> B6b[Leaderboards]
+        B7[Multilingual Support] --> B7a[Language Selector]
+        B7[Multilingual Support] --> B7b[JSONB Content: i18next]
+        B8[Referral Status] --> B8a[Pending/Completed]
+        B9[GDPR Requests] --> B9a[Data Access]
+        B9[GDPR Requests] --> B9b[Data Deletion]
+        B9[GDPR Requests] --> B9c[GDPR Form UI]
+    end
+
+    %% Merchant Dashboard (Phase 1, 2, 3)
+    subgraph Merchant Dashboard
+        D[Merchant Dashboard] --> D0[App Bridge Auth]
+        D[Merchant Dashboard] --> D1[Welcome Page]
+        D[Merchant Dashboard] --> D2[Points Program]
+        D[Merchant Dashboard] --> D3[Referrals Program]
+        D[Merchant Dashboard] --> D4[Customers]
+        D[Merchant Dashboard] --> D5[Analytics]
+        D[Merchant Dashboard] --> D6[Settings]
+        D[Merchant Dashboard] --> D7[On-Site Content]
+        D[Merchant Dashboard] --> D8[VIP Tiers]
+        D[Merchant Dashboard] --> D9[Activity Logs]
+        D[Merchant Dashboard] --> D10[Bonus Campaigns]
+        D[Merchant Dashboard] --> D11[Notification Templates]
+        D[Merchant Dashboard] --> D12[RFM Segment Preview]
+        D[Merchant Dashboard] --> D13[Customer Import]
+        D1[Welcome Page] --> D1a[Setup Tasks]
+        D1[Welcome Page] --> D1b[Congratulatory Messages]
+        D2[Points Program] --> D2a[Earn: Purchases, Signups]
+        D2[Points Program] --> D2b[Redeem: Discounts, Shipping]
+        D2[Points Program] --> D2c[Branding: Rewards Panel]
+        D2[Points Program] --> D2d[Status: Enable/Disable]
+        D3[Referrals Program] --> D3a[SMS/Email Config]
+        D3[Referrals Program] --> D3b[Social Sharing Config]
+        D3[Referrals Program] --> D3c[Status Toggle]
+        D4[Customers] --> D4a[List: Name, Email, Points]
+        D4[Customers] --> D4b[Search: Name/Email]
+        D5[Analytics] --> D5a[Metrics: Members, Points]
+        D5[Analytics] --> D5b[RFM Chart]
+        D5[Analytics] --> D5c[Advanced Reports]
+        D5[Analytics] --> D5d[CSV Export]
+        D6[Settings] --> D6a[Store Details, Billing]
+        D6[Settings] --> D6b[Branding]
+        D6[Settings] --> D6c[RFM Config]
+        D6[Settings] --> D6d[Developer Toolkit]
+        D6[Settings] --> D6e[Language Config]
+        D7[On-Site Content] --> D7a[Loyalty Page]
+        D7[On-Site Content] --> D7b[Rewards Panel]
+        D7[On-Site Content] --> D7c[Launcher Button]
+        D7[On-Site Content] --> D7d[Points Display]
+        D7[On-Site Content] --> D7e[Post-Purchase Widget]
+        D7[On-Site Content] --> D7f[Checkout Extensions]
+        D7[On-Site Content] --> D7g[Sticky Bar]
+        D8[VIP Tiers] --> D8a[Thresholds: Spending]
+        D8[VIP Tiers] --> D8b[Perks: Early Access]
+        D9[Activity Logs] --> D9a[Points, Referrals, VIP]
+        D10[Bonus Campaigns] --> D10a[Promotions]
+        D10[Bonus Campaigns] --> D10b[Goal Spend]
+        D10[Bonus Campaigns] --> D10c[Campaign Discounts]
+        D11[Notification Templates] --> D11a[Points, Referrals]
+        D11[Notification Templates] --> D11b[Template Editor UI]
+        D12[RFM Segment Preview] --> D12a[Chart.js Segments]
+        D13[Customer Import] --> D13a[CSV Upload UI]
+    end
+
+    %% Admin Module (Phase 1, 2, 3)
+    subgraph Admin Module
+        F[Admin Module] --> F0[RBAC Auth]
+        F[Admin Module] --> F1[Overview]
+        F[Admin Module] --> F2[Merchants]
+        F[Admin Module] --> F3[Admin Users]
+        F[Admin Module] --> F4[Logs]
+        F[Admin Module] --> F5[Plan Management]
+        F[Admin Module] --> F6[Integration Health]
+        F[Admin Module] --> F7[RFM Config Management]
+        F[Admin Module] --> F8[RFM Segment Export]
+        F[Admin Module] --> F9[GDPR Requests]
+        F[Admin Module] --> F10[Rate Limit Monitoring]
+        F1[Overview] --> F1a[Merchant Count, Points]
+        F2[Merchants] --> F2a[List: ID, Domain, Plan]
+        F2[Merchants] --> F2b[Adjust Points]
+        F2[Merchants] --> F2c[Suspend/Reactivate]
+        F3[Admin Users] --> F3a[Add/Edit/Delete Admins]
+        F4[Logs] --> F4a[API Logs, Audit Logs]
+        F9[GDPR Requests] --> F9a[Data Request]
+        F9[GDPR Requests] --> F9b[Data Redaction]
+        F9[GDPR Requests] --> F9c[GDPR Request Dashboard UI]
+        F10[Rate Limit Monitoring] --> F10a[429 Violations]
+        F10[Rate Limit Monitoring] --> F10b[Rate Limit Dashboard UI]
+    end
+
+    %% Integrations (Phase 1, 2, 3)
+    subgraph Integrations
+        H[Integrations] --> H1[Shopify]
+        H[Integrations] --> H2[Klaviyo]
+        H[Integrations] --> H3[Twilio]
+        H[Integrations] --> H4[Postscript]
+        H[Integrations] --> H5[Mailchimp]
+        H[Integrations] --> H6[Yotpo]
+        H[Integrations] --> H7[Square]
+        H[Integrations] --> H8[Lightspeed]
+        H[Integrations] --> H9[Gorgias]
+        H[Integrations] --> H10[Shopify Flow]
+        H1[Shopify] --> H1a[OAuth]
+        H1[Shopify] --> H1b[Orders/Create Webhook]
+        H1[Shopify] --> H1c[Orders/Cancelled Webhook]
+        H1[Shopify] --> H1d[GDPR Webhooks]
+        H1[Shopify] --> H1e[POS Points]
+        H1d[GDPR Webhooks] --> H1d1[customers/data_request]
+        H1d[GDPR Webhooks] --> H1d2[customers/redact]
+        H2[Klaviyo] --> H2a[Email Notifications]
+        H3[Twilio] --> H3a[SMS Notifications]
+        H4[Postscript] --> H4a[SMS/Email Notifications]
+        H7[Square] --> H7a[Payment Integration]
+    end
+
+    %% Database (Phase 1, 2, 3)
+    subgraph Database: PostgreSQL
+        I[Database] --> I1[merchants]
+        I[Database] --> I2[customers]
+        I[Database] --> I3[points_transactions]
+        I[Database] --> I4[referrals]
+        I[Database] --> I5[rewards]
+        I[Database] --> I6[reward_redemptions]
+        I[Database] --> I7[program_settings]
+        I[Database] --> I8[shopify_sessions]
+        I[Database] --> I9[customer_segments]
+        I[Database] --> I10[admin_users]
+        I[Database] --> I11[api_logs]
+        I[Database] --> I12[audit_logs]
+        I[Database] --> I13[vip_tiers]
+        I[Database] --> I14[email_templates]
+        I[Database] --> I15[email_events]
+        I[Database] --> I16[integrations]
+        I[Database] --> I17[bonus_campaigns]
+        I[Database] --> I18[gamification_achievements]
+        I[Database] --> I19[nudges]
+        I[Database] --> I20[nudge_events]
+        I[Database] --> I21[gdpr_requests]
+        I[Database] --> I22[import_logs]
+        I[Database] --> I23[referral_links]
+        I[Database] --> I24[rfm_segment_counts]
+        I1[merchants] --> I1a[Encrypted api_token]
+        I2[customers] --> I2a[Encrypted email]
+        I2[customers] --> I2b[RFM Score: JSONB]
+        I3[points_transactions] --> I3a[Partitioned]
+        I4[referrals] --> I4a[Partitioned]
+        I4[referrals] --> I4b[referral_link_id]
+        I6[reward_redemptions] --> I6a[Partitioned]
+        I6[reward_redemptions] --> I6b[campaign_id]
+        I11[api_logs] --> I11a[Partitioned]
+        I15[email_events] --> I15a[Partitioned]
+        I17[bonus_campaigns] --> I17a[Partitioned]
+        I21[gdpr_requests] --> I21a[90-Day Retention]
+        I24[rfm_segment_counts] --> I24a[Materialized View]
+    end
+
+    %% Backend (Phase 1, 2, 3)
+    subgraph Backend
+        G[Backend] --> G1[Points Service: Dockerized]
+        G[Backend] --> G2[Referrals Service: Dockerized]
+        G[Backend] --> G3[Analytics Service: Dockerized]
+        G[Backend] --> G4[Admin Service: Dockerized]
+        G[Backend] --> G5[Auth Service: Dockerized]
+        G[Backend] --> G6[Frontend Service: Dockerized]
+        G[Backend] --> G7[Rust/Wasm Shopify Functions]
+        G1[Points Service: Dockerized] --> G1a[/points.v1/EarnPoints]
+        G1[Points Service: Dockerized] --> G1b[/points.v1/RedeemReward]
+        G1[Points Service: Dockerized] --> G1c[/points.v1/AdjustPoints]
+        G1[Points Service: Dockerized] --> G1d[/points.v1/CreateCampaign]
+        G1[Points Service: Dockerized] --> G1e[/points.v1/GetPointsBalance]
+        G1[Points Service: Dockerized] --> G1f[/points.v1/GetVipTierStatus]
+        G2[Referrals Service: Dockerized] --> G2a[/referrals.v1/CreateReferral]
+        G2[Referrals Service: Dockerized] --> G2b[/referrals.v1/CompleteReferral]
+        G2[Referrals Service: Dockerized] --> G2c[/referrals.v1/SendReferralNotification]
+        G2[Referrals Service: Dockerized] --> G2d[/referrals.v1/GetReferralStatus]
+        G2[Referrals Service: Dockerized] --> G2e[/referrals.v1/UpdateReferralConfig]
+        G3[Analytics Service: Dockerized] --> G3a[/analytics.v1/GetAnalytics]
+        G3[Analytics Service: Dockerized] --> G3b[/analytics.v1/UpdateRFMScores]
+        G3[Analytics Service: Dockerized] --> G3c[/analytics.v1/GetNudges]
+        G3[Analytics Service: Dockerized] --> G3d[/analytics.v1/GetLeaderboard]
+        G3[Analytics Service: Dockerized] --> G3e[/analytics.v1/ExportAnalytics]
+        G3[Analytics Service: Dockerized] --> G3f[/analytics.v1/PreviewRFMSegments]
+        G4[Admin Service: Dockerized] --> G4a[/admin.v1/CompleteSetupTask]
+        G4[Admin Service: Dockerized] --> G4b[/admin.v1/UpdatePointsProgram]
+        G4[Admin Service: Dockerized] --> G4c[/admin.v1/AdjustPoints]
+        G4[Admin Service: Dockerized] --> G4d[/admin.v1/GetLogs]
+        G4[Admin Service: Dockerized] --> G4e[/admin.v1/ProcessGDPRRequest]
+        G4[Admin Service: Dockerized] --> G4f[/admin.v1/GetRateLimits]
+        G4[Admin Service: Dockerized] --> G4g[/admin.v1/UpdateStoreSettings]
+        G4[Admin Service: Dockerized] --> G4h[/admin.v1/UpdateRFMConfig]
+        G4[Admin Service: Dockerized] --> G4i[/admin.v1/UpdateMerchantStatus]
+        G4[Admin Service: Dockerized] --> G4j[/admin.v1/ImportCustomers]
+        G5[Auth Service: Dockerized] --> G5a[/auth.v1/ListAdminUsers]
+        G6[Frontend Service: Dockerized] --> G6a[/frontend.v1/UpdateContent]
+        G6[Frontend Service: Dockerized] --> G6b[/frontend.v1/GetWidgetConfig]
+        G6[Frontend Service: Dockerized] --> G6c[/frontend.v1/UpdateCheckoutConfig]
+        G7[Rust/Wasm Shopify Functions] --> G7a[Discounts]
+        G7[Rust/Wasm Shopify Functions] --> G7b[RFM Updates]
+        G7[Rust/Wasm Shopify Functions] --> G7c[VIP Multipliers]
+        G7[Rust/Wasm Shopify Functions] --> G7d[Campaign Discounts]
+        G[Backend] --> G8[Error Handling]
+        G8[Error Handling] --> G8a[400: Invalid Input]
+        G8[Error Handling] --> G8b[401: Unauthorized]
+        G8[Error Handling] --> G8c[429: Rate Limit]
+        G8[Error Handling] --> G8d[Exponential Backoff]
+    end
+
+    %% Data Flow
+    A[Customer] -->|Earns/Redeems| I3[points_transactions]
+    A[Customer] -->|Refers| I4[referrals]
+    A[Customer] -->|Views| I23[referral_links]
+    A[Customer] -->|Triggers| I20[nudge_events]
+    A[Customer] -->|Views| I13[vip_tiers]
+    A[Customer] -->|Earns| I18[gamification_achievements]
+    A[Customer] -->|Submits| I21[gdpr_requests]
+    A[Customer] -->|Views| I24[rfm_segment_counts]
+    B[Customer Widget] -->|Fetches/Saves| J[Cache: Redis]
+    B[Customer Widget] -->|Authenticates| H1a[OAuth]
+    B[Customer Widget] -->|Sets| J1[localStorage: Language]
+    B0[App Bridge Auth] -->|Secures| G1[Points Service: Dockerized]
+    B0[App Bridge Auth] -->|Secures| G2[Referrals Service: Dockerized]
+    B0[App Bridge Auth] -->|Secures| G3[Analytics Service: Dockerized]
+    B0[App Bridge Auth] -->|Secures| G6[Frontend Service: Dockerized]
+    B8[Referral Status] -->|Queries| I4[referrals]
+    B8[Referral Status] -->|Queries| I23[referral_links]
+    B9[GDPR Requests] -->|Submits| G4e[/admin.v1/ProcessGDPRRequest]
+    D[Merchant Dashboard] -->|Configures| I7[program_settings]
+    D[Merchant Dashboard] -->|Configures| I14[email_templates]
+    D[Merchant Dashboard] -->|Views| I9[customer_segments]
+    D[Merchant Dashboard] -->|Views| I24[rfm_segment_counts]
+    D[Merchant Dashboard] -->|Authenticates| H1a[OAuth]
+    D0[App Bridge Auth] -->|Secures| G1[Points Service: Dockerized]
+    D0[App Bridge Auth] -->|Secures| G2[Referrals Service: Dockerized]
+    D0[App Bridge Auth] -->|Secures| G3[Analytics Service: Dockerized]
+    D0[App Bridge Auth] -->|Secures| G4[Admin Service: Dockerized]
+    D0[App Bridge Auth] -->|Secures| G6[Frontend Service: Dockerized]
+    D11[Notification Templates] -->|Saves| G6a[/frontend.v1/UpdateContent]
+    D12[RFM Segment Preview] -->|Queries| I24[rfm_segment_counts]
+    D12[RFM Segment Preview] -->|Queries| G3f[/analytics.v1/PreviewRFMSegments]
+    D13[Customer Import] -->|Uploads| G4j[/admin.v1/ImportCustomers]
+    F[Admin Module] -->|Manages| I1[merchants]
+    F[Admin Module] -->|Manages| I10[admin_users]
+    F[Admin Module] -->|Views| I11[api_logs]
+    F[Admin Module] -->|Views| I12[audit_logs]
+    F[Admin Module] -->|Processes| I21[gdpr_requests]
+    F[Admin Module] -->|Monitors| I11a[Partitioned: 429]
+    F0[RBAC Auth] -->|Secures| G4[Admin Service: Dockerized]
+    F0[RBAC Auth] -->|Secures| G5[Auth Service: Dockerized]
+    F9[GDPR Requests] -->|Queries| G4e[/admin.v1/ProcessGDPRRequest]
+    F10[Rate Limit Monitoring] -->|Queries| G4f[/admin.v1/GetRateLimits]
+    H[Integrations] -->|Sends Data| G[Backend]
+    H1[Shopify] -->|Triggers| G1[Points Service: Dockerized]
+    H1[Shopify] -->|Triggers| G2[Referrals Service: Dockerized]
+    H2[Klaviyo] -->|Receives| G2c[/referrals.v1/SendReferralNotification]
+    H2[Klaviyo] -->|Receives| G4e[/admin.v1/ProcessGDPRRequest]
+    H2[Klaviyo] -->|Receives| G6a[/frontend.v1/UpdateContent]
+    H3[Twilio] -->|Receives| G2c[/referrals.v1/SendReferralNotification]
+    H4[Postscript] -->|Receives| G2c[/referrals.v1/SendReferralNotification]
+    H7[Square] -->|Integrates| G4[Admin Service: Dockerized]
+    I2[customers] -->|Stores RFM| I9[customer_segments]
+    I2[customers] -->|Stores RFM| I24[rfm_segment_counts]
+    I13[vip_tiers] -->|Stores VIP Data| I2[customers]
+    I7[program_settings] -->|Stores RFM Thresholds| D6c[RFM Config]
+    I7[program_settings] -->|Stores Language| D6e[Language Config]
+    I14[email_templates] -->|Provides| B7b[JSONB Content: i18next]
+    I14[email_templates] -->|Provides| D11a[Points, Referrals]
+    I6[reward_redemptions] -->|Stores| G7d[Campaign Discounts]
+    J[Cache: Redis] -->|Caches| J2[points:{customer_id}]
+    J[Cache: Redis] -->|Caches| J3[referral:{referral_code}]
+    J[Cache: Redis] -->|Caches| J4[nudge:{customer_id}]
+    J[Cache: Redis] -->|Caches| J5[tier:{customer_id}]
+    J[Cache: Redis] -->|Caches| J6[leaderboard:{merchant_id}:sorted_set]
+    J[Cache: Redis] -->|Caches| J7[import:{merchant_id}]
+    J[Cache: Redis] -->|Caches| J8[campaign:{campaign_id}]
+    J[Cache: Redis] -->|Caches| J9[rfm:preview:{merchant_id}:stream]
+    J[Cache: Redis] -->|Caches| J10[rate_limit:{merchant_id}]
+    J[Cache: Redis] -->|Caches| J11[referral_status:{customer_id}]
+    J[Cache: Redis] -->|Caches| J12[analytics:{merchant_id}]
+    J[Cache: Redis] -->|Caches| J13[content:{merchant_id}:{locale}]
+    K[Queue: Bull] -->|Processes| H2a[Email Notifications]
+    K[Queue: Bull] -->|Processes| H3a[SMS Notifications]
+    K[Queue: Bull] -->|Processes| H4a[SMS/Email Notifications]
+    G1[Points Service: Dockerized] -->|Queries| I[Database: PostgreSQL]
+    G2[Referrals Service: Dockerized] -->|Queries| I[Database: PostgreSQL]
+    G3[Analytics Service: Dockerized] -->|Queries| I[Database: PostgreSQL]
+    G4[Admin Service: Dockerized] -->|Queries| I[Database: PostgreSQL]
+    G6[Frontend Service: Dockerized] -->|Queries| I[Database: PostgreSQL]
+
+    %% Explanation of Flow Diagram
+    **Overview**:
+    - The diagram represents the LoyalNest App’s architecture, supporting points earning, redemption, referrals, VIP tiers, gamification, analytics, customer imports, campaign discounts, GDPR compliance, referral status, RFM previews, and rate limit monitoring across Phases 1–3 for Shopify Plus merchants (50,000+ customers, 1,000 orders/hour).
+    - Aligns with `schema.txt`, `user_stories.md`, `feature_analytics.txt`, and `RFM.txt`.
+
+    **Key Flows**:
+    - **Points Earning (US-CW2)**:
+      - Customer makes a $100 purchase, triggers Shopify `orders/create` webhook (H1b).
+      - Points Service (G1a: /points.v1/EarnPoints, Dockerized) validates HMAC (H1a), fetches `program_settings.config.points_per_dollar` (I7), calculates points (100 * 1 = 100).
+      - Inserts into `points_transactions` (I3a, partitioned), updates `customers.points_balance` (I2a, AES-256 encrypted email), caches in Redis (J2: points:{customer_id}).
+      - Logs to PostHog (L, `points_earned`, `ui_action:purchase_completed`), queues notification via Bull (K) to Klaviyo/Twilio (H2a, H3a) using `email_templates.body` (I14, JSONB, i18next).
+      - Handles errors (G8a: invalid webhook, G8c: 429 rate limit, G8d: exponential backoff).
+    - **Points Redemption (US-CW3)**:
+      - Customer selects discount (B2a), widget calls `/points.v1/RedeemReward` (G1b, Dockerized) with OAuth (B0).
+      - Points Service checks `rewards` (I5), deducts points from `customers.points_balance` (I2) in TypeORM transaction, inserts into `reward_redemptions` (I6a, I6b: campaign_id, AES-256 encrypted).
+      - Creates Shopify discount via Rust/Wasm (G7a), updates Redis (J2: points:{customer_id}), logs to PostHog (L, `points_redeemed`, `ui_action:reward_redeemed`).
+      - Handles errors (G8a: insufficient points, G8c: 429 rate limit).
+    - **Referral Rewards (US-CW4, US-CW5, US-BI2)**:
+      - Customer shares link (B3a), Referrals Service (G2a: /referrals.v1/CreateReferral, Dockerized) inserts into `referral_links` (I23, I4b: referral_link_id), queues notification via Bull (K, H2a, H3a, H4a).
+      - Friend signs up, Referrals Service (G2b: /referrals.v1/CompleteReferral) inserts into `referrals` (I4a, I4b: referral_link_id), awards points via `points_transactions` (I3a), updates Redis (J3: referral:{referral_code}), logs to PostHog (L, `referral_completed`, `ui_action:referral_reward_earned`).
+      - Customer views status (B8a) via `/referrals.v1/GetReferralStatus` (G2d), queries `referrals` (I4, I4b: referral_link_id), caches in Redis (J11: referral_status:{customer_id}), logs to PostHog (L, `referral_status_viewed`, `ui_action:referral_status_viewed`).
+    - **Referral Notifications (US-CW7, US-BI2)**:
+      - Referrals Service (G2c: /referrals.v1/SendReferralNotification, Dockerized) sends notifications via Klaviyo/Twilio/Postscript (H2a, H3a, H4a), logs in `email_events` (I15a, partitioned).
+      - Uses `email_templates.body` (I14, JSONB, `CHECK ?| ARRAY['en', 'es', 'fr']`), caches in Redis (J3: referral:{referral_code}).
+      - Logs to PostHog (L, `referral_notification_sent`, `ui_action:referral_shared`).
+    - **Order Cancellation (US-CW6)**:
+      - Shopify `orders/cancelled` webhook (H1c) triggers `/points.v1/AdjustPoints` (G1c, Dockerized).
+      - Points Service deducts points from `points_transactions` (I3a), updates `customers.points_balance` (I2), caches in Redis (J2: points:{customer_id}).
+      - Logs to PostHog (L, `points_adjusted`, `ui_action:points_adjusted_viewed`).
+    - **GDPR Compliance (US-CW8, US-AM6)**:
+      - Customer submits GDPR request via GDPR Form UI (B9c, Tailwind CSS) to `/admin.v1/ProcessGDPRRequest` (G4e, Dockerized), inserts into `gdpr_requests` (I21a, 90-day retention).
+      - Shopify `customers/data_request`, `customers/redact` webhooks (H1d1, H1d2) trigger Admin Service (G4e), queries `customers` (I2a), `points_transactions` (I3a), `reward_redemptions` (I6a, I6b: campaign_id), `rfm_segment_counts` (I24a).
+      - Sends data via Klaviyo (H2a, K), caches in Redis (J9: rfm:preview:{merchant_id}:stream), logs to PostHog (L, `gdpr_request_processed`, `ui_action:gdpr_form_submitted`).
+      - Admin views GDPR Request Dashboard UI (F9c, Polaris) to monitor requests.
+    - **RFM Updates (US-BI5)**:
+      - Analytics Service (G3b: /analytics.v1/UpdateRFMScores, Dockerized) runs daily job (`0 1 * * *`), updates `customers.rfm_score` (I2b, JSONB, 40% recency, 30% frequency, 30% monetary) and `rfm_segment_counts` (I24a, materialized view).
+      - Uses partial index `idx_customers_rfm_score_at_risk`, caches in Redis (J9: rfm:preview:{merchant_id}:stream), logs to PostHog (L, `rfm_updated`).
+    - **RFM Nudges (US-CW10)**:
+      - Widget displays nudge (B4a, Tailwind CSS) from `nudges` (I19, JSONB, i18next), logs interaction in `nudge_events` (I20, partitioned), caches in Redis (J4: nudge:{customer_id}).
+      - Notifies via Klaviyo (H2a, K), logs to PostHog (L, `nudge_action`, `ui_action:nudge_interacted`).
+    - **RFM Segment Preview (US-MD12)**:
+      - Merchant views RFM Segment Preview (D12a, Chart.js) via `/analytics.v1/PreviewRFMSegments` (G3f, Dockerized), queries `rfm_segment_counts` (I24a), caches in Redis (J9: rfm:preview:{merchant_id}:stream).
+      - Logs to PostHog (L, `rfm_preview_viewed`, `ui_action:rfm_preview_viewed`).
+    - **Customer Import (US-BI3)**:
+      - Merchant uploads CSV via Customer Import UI (D13a, Polaris) to `/admin.v1/ImportCustomers` (G4j, Dockerized), validates data, inserts into `customers` (I2a), `points_transactions` (I3a), logs in `import_logs` (I22).
+      - Caches progress in Redis (J7: import:{merchant_id}), logs to PostHog (L, `customer_import_completed`, `ui_action:customer_imported`).
+    - **Campaign Discounts (US-BI4)**:
+      - Points Service (G1d: /points.v1/CreateCampaign, Dockerized) checks `bonus_campaigns` (I17a, partitioned) via Rust/Wasm (G7d), validates RFM conditions from `rfm_segment_counts` (I24a), inserts `reward_redemptions` (I6a, I6b: campaign_id).
+      - Caches in Redis (J8: campaign:{campaign_id}), notifies via Klaviyo/Postscript (H2a, H4a), logs to PostHog (L, `campaign_discount_redeemed`, `ui_action:campaign_discount`).
+    - **Notification Templates (US-MD8)**:
+      - Merchant configures templates via Template Editor UI (D11b, Polaris), saves to `email_templates` (I14, JSONB, `CHECK ?| ARRAY['en', 'es', 'fr']`) via `/frontend.v1/UpdateContent` (G6a, Dockerized).
+      - Caches in Redis (J13: content:{merchant_id}:{locale}), logs to PostHog (L, `template_updated`, `ui_action:template_updated`).
+    - **Rate Limit Monitoring (US-AM11)**:
+      - Admin monitors violations via Rate Limit Dashboard UI (F10b, Polaris) using `/admin.v1/GetRateLimits` (G4f, Dockerized), queries `api_logs` (I11a, partitioned, `status_code=429`), caches in Redis (J10: rate_limit:{merchant_id}).
+      - Notifies admins via Klaviyo (H2a) for repeated violations (3+ in 1h), logs to PostHog (L, `rate_limit_viewed`, `ui_action:rate_limit_viewed`).
+
+    **How to Use**:
+    - **Render**: Copy Mermaid code into Mermaid Live Editor (https://mermaid.live/) or VS Code with Mermaid plugin. Export as SVG/PNG for documentation.
+    - **Documentation**: Save to `docs/flows/system_architecture.mmd`. Include in README.md or presentations for stakeholders.
+    - **Development**: Guide implementation of `WebhookController`, Dockerized microservices (G1-G6), and UI components (Vite + React, Polaris, Tailwind CSS).
+    - **Testing**: Map to Jest tests for APIs (e.g., `/points.v1/EarnPoints`, `/referrals.v1/GetReferralStatus`) and UI components (e.g., GDPR Form UI, Rate Limit Dashboard UI).
+    - **Scalability**: Supports 50,000+ customers with partitioned tables (I3a, I4a, I6a, I11a, I15a, I17a), Bull queues (K), Redis sorted sets (J6: leaderboard:{merchant_id}:sorted_set), and Redis Streams (J9: rfm:preview:{merchant_id}:stream).
+    - **Security**: Implements Shopify OAuth (H1a), RBAC (F0), and AES-256 encryption via `pgcrypto` (I1a, I2a, I6a).
+    - **Multilingualism**: Uses i18next, `Accept-Language` headers, and JSONB fields (`program_settings.config`, `email_templates.body`, `nudges.title`) with `CHECK ?| ARRAY['en', 'es', 'fr']`.
+    - **Error Handling**: Handles 400 (invalid input), 401 (unauthorized), 429 (rate limit) with exponential backoff (G8d).
+    - **Analytics**: Integrates PostHog (L) for consistent event tracking (e.g., `points_earned`, `referral_notification_sent`, `gdpr_request_processed`, `rfm_preview_viewed`).
+```

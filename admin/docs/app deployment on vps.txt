@@ -7,7 +7,7 @@
 5. 
 
 
-
+sample Docker Compose file or GitHub Actions workflow for the CI/CD pipeline!
 
 
 
@@ -36,15 +36,7 @@ Expiration: Choose a duration (e.g., 90 days) or no expiration.
 Scopes: Select repo (full control of private repositories).
 Copy the generated token (e.g., ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx).
 Clone with PAT:
-bash
 
-Collapse
-
-Wrap
-
-Run
-
-Copy
 sudo su -
 su - loyalnest
 cd /home/loyalnest/www/herethere.dev/dev
@@ -73,96 +65,21 @@ Run
 
 Copy
 git config --global credential.helper store
-echo "https://herethereapp:<PAT>@github.com" > ~/.git-credentials
+echo "https://herethereapp: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@github.com" > ~/.git-credentials
 chmod 600 ~/.git-credentials
 Now, future git pull or git clone commands won’t prompt for credentials.
-Option 2: Use SSH (Alternative):
 
-Generate SSH Key:
-bash
+================================================================
+loyalnest@srv614069:~/www/herethere.dev/dev$ git pull origin develop
+===============================================================
 
-Collapse
 
-Wrap
 
-Run
 
-Copy
-su - loyalnest
-ssh-keygen -t ed25519 -C "loyalnest@srv614069" -f ~/.ssh/id_ed25519
-Press Enter to accept defaults (no passphrase for simplicity).
-Add SSH Key to GitHub:
-bash
 
-Collapse
 
-Wrap
 
-Run
 
-Copy
-cat ~/.ssh/id_ed25519.pub
-Copy the output (public key).
-On GitHub: Settings > SSH and GPG keys > New SSH key.
-Paste the key, name it (e.g., srv614069), and save.
-Configure SSH:
-bash
-
-Collapse
-
-Wrap
-
-Run
-
-Copy
-nano ~/.ssh/config
-text
-
-Collapse
-
-Wrap
-
-Copy
-Host github.com
-    HostName github.com
-    User git
-    IdentityFile ~/.ssh/id_ed25519
-bash
-
-Collapse
-
-Wrap
-
-Run
-
-Copy
-chmod 600 ~/.ssh/config
-Test SSH:
-bash
-
-Collapse
-
-Wrap
-
-Run
-
-Copy
-ssh -T git@github.com
-Should return: Hi herethereapp! You've successfully authenticated...
-Clone with SSH:
-bash
-
-Collapse
-
-Wrap
-
-Run
-
-Copy
-cd /home/loyalnest/www/herethere.dev/dev
-git clone git@github.com:herethereapp/loyalnest.git .
-git checkout develop
-Recommendation: Use the PAT method for simplicity, as it avoids SSH setup and works well for VPS deployments. Use SSH if you prefer key-based access or have security policies requiring it.
 
 2. Verify Cloned Files
 Goal: Ensure all project files (frontend, backend, root-level files like .env, Dockerfile, docker-compose.yml) are cloned correctly.
