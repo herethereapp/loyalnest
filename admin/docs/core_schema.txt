@@ -1,0 +1,767 @@
+-- Enable pgcrypto for AES-256 encryption (GDPR/CCPA compliance)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Function to normalize shop_domain to lowercase
+CREATE OR REPLACE FUNCTION normalize_shop_domain()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.shop_domain = LOWER(NEW.shop_domain);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to auto-update updated_at column
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to capture changes to customers table for RFM segment deltas
+CREATE OR REPLACE FUNCTION trigger_rfm_segment_deltas() RETURNS TRIGGER AS $$
+DECLARE
+    v_default_lang VARCHAR;
+    v_supported_langs JSONB;
+BEGIN
+    SELECT language->>'default', language->'supported'
+    INTO v_default_lang, v_supported_langs
+    FROM merchants
+    WHERE id = (CASE WHEN TG_OP = 'DELETE' THEN OLD.merchant_id ELSE NEW.merchant_id END);
+
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO rfm_segment_deltas (
+            merchant_id, customer_id, rfm_score, metadata, operation, created_at
+        )
+        VALUES (
+            NEW.merchant_id, NEW.id, NEW.rfm_score,
+            NEW.metadata || jsonb_build_object('default_language', v_default_lang),
+            'insert', CURRENT_TIMESTAMP
+        );
+        IF NEW.churn_score IS NOT NULL THEN
+            INSERT INTO churn_predictions (
+                merchant_id, customer_id, churn_probability, recommended_actions, created_at
+            )
+            VALUES (
+                NEW.merchant_id, NEW.id, NEW.churn_score,
+                jsonb_build_object(
+                    'action_key', 'churn.action.evaluate',
+                    'source', 'xai_api',
+                    'translations', jsonb_build_object(
+                        'en', 'Evaluate churn risk', 'es', 'Evaluar riesgo de abandono',
+                        'de', 'Abwanderungsrisiko bewerten', 'ja', '離脱リスクを評価',
+                        'fr', 'Évaluer le risque de désabonnement', 'pt', 'Avaliar risco de churn',
+                        'ru', 'Оценить риск оттока', 'it', 'Valutare il rischio di abbandono',
+                        'nl', 'Verlooprisico evalueren', 'pl', 'Ocenić ryzyko odejścia',
+                        'tr', 'Terk etme riskini değerlendirme', 'fa', 'ارزیابی ریسک ترک',
+                        'zh-CN', '评估流失风险', 'vi', 'Đánh giá nguy cơ rời bỏ',
+                        'id', 'Evaluasi risiko churn', 'cs', 'Vyhodnotit riziko odchodu',
+                        'ar', 'تقييم مخاطر التسرب', 'ko', '이탈 위험 평가',
+                        'uk', 'Оцінити ризик втрати', 'hu', 'Elvándorlási kockázat értékelése',
+                        'sv', 'Utvärdera risken för avhopp', 'he', 'הערכת סיכון הנטישה'
+                    ),
+                    'text_direction', jsonb_build_object(
+                        'ar', 'rtl', 'he', 'rtl',
+                        v_default_lang, CASE WHEN v_default_lang IN ('ar', 'he') THEN 'rtl' ELSE 'ltr' END
+                    )
+                ),
+                CURRENT_TIMESTAMP
+            );
+        END IF;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.rfm_score IS DISTINCT FROM NEW.rfm_score 
+           OR OLD.metadata->>'lifecycle_stage' IS DISTINCT FROM NEW.metadata->>'lifecycle_stage'
+           OR OLD.churn_score IS DISTINCT FROM NEW.churn_score THEN
+            INSERT INTO rfm_segment_deltas (
+                merchant_id, customer_id, rfm_score, metadata, operation, created_at
+            )
+            VALUES (
+                NEW.merchant_id, NEW.id, NEW.rfm_score,
+                NEW.metadata || jsonb_build_object('default_language', v_default_lang),
+                'update', CURRENT_TIMESTAMP
+            );
+            IF OLD.churn_score IS DISTINCT FROM NEW.churn_score AND NEW.churn_score IS NOT NULL THEN
+                INSERT INTO churn_predictions (
+                    merchant_id, customer_id, churn_probability, recommended_actions, created_at
+                )
+                VALUES (
+                    NEW.merchant_id, NEW.id, NEW.churn_score,
+                    jsonb_build_object(
+                        'action_key', 'churn.action.reevaluate',
+                        'source', 'xai_api',
+                        'translations', jsonb_build_object(
+                            'en', 'Re-evaluate churn risk', 'es', 'Reevaluar riesgo de abandono',
+                            'de', 'Abwanderungsrisiko erneut bewerten', 'ja', '離脱リスクを再評価',
+                            'fr', 'Réévaluer le risque de désabonnement', 'pt', 'Reavaliar risco de churn',
+                            'ru', 'Переоценить риск оттока', 'it', 'Rivalutare il rischio di abbandono',
+                            'nl', 'Verlooprisico opnieuw evalueren', 'pl', 'Ponownie ocenić ryzyko odejścia',
+                            'tr', 'Terk etme riskini yeniden değerlendirme', 'fa', 'ارزیابی مجدد ریسک ترک',
+                            'zh-CN', '重新评估流失风险', 'vi', 'Đánh giá lại nguy cơ rời bỏ',
+                            'id', 'Evaluasi ulang risiko churn', 'cs', 'Znovu vyhodnotit riziko odchodu',
+                            'ar', 'إعادة تقييم مخاطر التسرب', 'ko', '이탈 위험 재평가',
+                            'uk', 'Переоцінити ризик втрати', 'hu', 'Újraértékelni az elvándorlási kockázatot',
+                            'sv', 'Omvärdera risken för avhopp', 'he', 'הערכה מחדש של סיכון הנטישה'
+                        ),
+                        'text_direction', jsonb_build_object(
+                            'ar', 'rtl', 'he', 'rtl',
+                            v_default_lang, CASE WHEN v_default_lang IN ('ar', 'he') THEN 'rtl' ELSE 'ltr' END
+                        )
+                    ),
+                    CURRENT_TIMESTAMP
+                );
+            END IF;
+        END IF;
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO rfm_segment_deltas (
+            merchant_id, customer_id, rfm_score, metadata, operation, created_at
+        )
+        VALUES (
+            OLD.merchant_id, OLD.id, OLD.rfm_score,
+            OLD.metadata || jsonb_build_object('default_language', v_default_lang),
+            'delete', CURRENT_TIMESTAMP
+        );
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to populate audit_logs with replay metadata and i18next support
+CREATE OR REPLACE FUNCTION trigger_audit_log() RETURNS TRIGGER AS $$
+DECLARE
+    v_default_lang VARCHAR;
+    v_supported_langs JSONB;
+    v_action_key VARCHAR;
+    v_localized_action JSONB;
+BEGIN
+    SELECT language->>'default', language->'supported'
+    INTO v_default_lang, v_supported_langs
+    FROM merchants
+    WHERE id = (CASE WHEN TG_OP = 'DELETE' THEN OLD.merchant_id ELSE NEW.merchant_id END);
+
+    v_action_key := 'audit.' || TG_TABLE_NAME || '.' || CASE
+        WHEN TG_OP = 'INSERT' THEN 'created'
+        WHEN TG_OP = 'UPDATE' THEN 'updated'
+        WHEN TG_OP = 'DELETE' THEN 'deleted'
+    END;
+
+    v_localized_action := jsonb_build_object(
+        'en', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' created'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' updated'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' deleted' END,
+        'es', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' creado'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' actualizado'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' eliminado' END,
+        'de', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' erstellt'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' aktualisiert'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' gelöscht' END,
+        'ja', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' 作成'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' 更新'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' 削除' END,
+        'fr', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' créé'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' mis à jour'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' supprimé' END,
+        'pt', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' criado'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' atualizado'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' deletado' END,
+        'ru', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' создан'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' обновлен'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' удален' END,
+        'it', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' creato'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' aggiornato'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' eliminato' END,
+        'nl', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' aangemaakt'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' bijgewerkt'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' verwijderd' END,
+        'pl', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' utworzony'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' zaktualizowany'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' usunięty' END,
+        'tr', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' oluşturuldu'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' güncellendi'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' silindi' END,
+        'fa', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' ایجاد شده'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' به‌روزرسانی شده'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' حذف شده' END,
+        'zh-CN', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' 已创建'
+                    WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' 已更新'
+                    WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' 已删除' END,
+        'vi', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' được tạo'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' được cập nhật'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' đã bị xóa' END,
+        'id', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' dibuat'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' diperbarui'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' dihapus' END,
+        'cs', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' vytvořen'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' aktualizován'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' smazán' END,
+        'ar', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' تم إنشاؤه'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' تم تحديثه'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' تم حذفه' END,
+        'ko', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' 생성됨'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' 업데이트됨'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' 삭제됨' END,
+        'uk', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' створено'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' оновлено'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' видалено' END,
+        'hu', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' létrehozva'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' frissítve'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' törölve' END,
+        'sv', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' skapad'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' uppdaterad'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' raderad' END,
+        'he', CASE WHEN TG_OP = 'INSERT' THEN TG_TABLE_NAME || ' נוצר'
+                  WHEN TG_OP = 'UPDATE' THEN TG_TABLE_NAME || ' עודכן'
+                  WHEN TG_OP = 'DELETE' THEN TG_TABLE_NAME || ' נמחק' END
+    );
+
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_logs (
+            merchant_id, actor_id, entity_type, entity_id, action, severity, metadata, created_at
+        )
+        VALUES (
+            NEW.merchant_id, NULL, TG_TABLE_NAME, NEW.id, v_action_key, 'info',
+            jsonb_build_object(
+                'operation', 'insert', 'replay_status', 'none',
+                'original_action_id', NULL, 'localized_action', v_localized_action,
+                'text_direction', CASE WHEN v_default_lang IN ('ar', 'he') THEN 'rtl' ELSE 'ltr' END
+            ),
+            CURRENT_TIMESTAMP
+        );
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_logs (
+            merchant_id, actor_id, entity_type, entity_id, action, severity, metadata, created_at
+        )
+        VALUES (
+            NEW.merchant_id, NULL, TG_TABLE_NAME, NEW.id, v_action_key, 'info',
+            jsonb_build_object(
+                'operation', 'update', 'replay_status', 'none',
+                'original_action_id', NULL, 'localized_action', v_localized_action,
+                'text_direction', CASE WHEN v_default_lang IN ('ar', 'he') THEN 'rtl' ELSE 'ltr' END
+            ),
+            CURRENT_TIMESTAMP
+        );
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO audit_logs (
+            merchant_id, actor_id, entity_type, entity_id, action, severity, metadata, created_at
+        )
+        VALUES (
+            OLD.merchant_id, NULL, TG_TABLE_NAME, OLD.id, v_action_key, 'warning',
+            jsonb_build_object(
+                'operation', 'delete', 'replay_status', 'none',
+                'original_action_id', NULL, 'localized_action', v_localized_action,
+                'text_direction', CASE WHEN v_default_lang IN ('ar', 'he') THEN 'rtl' ELSE 'ltr' END
+            ),
+            CURRENT_TIMESTAMP
+        );
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to refresh rfm_segment_counts incrementally
+CREATE OR REPLACE FUNCTION refresh_rfm_segment_counts() RETURNS VOID AS $$
+DECLARE
+    v_delta RECORD;
+    v_segment_id VARCHAR;
+    v_lifecycle_stage VARCHAR;
+    v_segment_name JSONB;
+    v_conditions JSONB;
+BEGIN
+    PERFORM pg_advisory_lock(123456789);
+    FOR v_delta IN (
+        SELECT id, merchant_id, customer_id, rfm_score, metadata, operation, created_at
+        FROM rfm_segment_deltas
+        WHERE created_at > (SELECT COALESCE(MAX(last_refreshed), '1970-01-01'::TIMESTAMP WITH TIME ZONE) FROM rfm_segment_counts)
+        ORDER BY created_at
+    ) LOOP
+        v_segment_id := 'seg_' || (v_delta.rfm_score->>'recency') || (v_delta.rfm_score->>'frequency') || (v_delta.rfm_score->>'monetary');
+        v_lifecycle_stage := v_delta.metadata->>'lifecycle_stage';
+        v_segment_name := CASE
+            WHEN v_lifecycle_stage = 'churned' THEN jsonb_build_object('en', 'Churned', 'es', 'Abandonado', 'de', 'Verloren', 'ja', '離脱', 'fr', 'Perdu', 'pt', 'Abandonado', 'ru', 'Утрачен', 'it', 'Perso', 'nl', 'Verloren', 'pl', 'Stracony', 'tr', 'Kaybedilmiş', 'fa', 'از دست رفته', 'zh-CN', '流失', 'vi', 'Mất khách', 'id', 'Hilang', 'cs', 'Ztracený', 'ar', 'متوقف', 'ko', '이탈', 'uk', 'Втрачений', 'hu', 'Elvesztett', 'sv', 'Förlorad', 'he', 'אבוד')
+            WHEN v_lifecycle_stage = 'vip' THEN jsonb_build_object('en', 'VIP', 'es', 'VIP', 'de', 'VIP', 'ja', 'VIP', 'fr', 'VIP', 'pt', 'VIP', 'ru', 'VIP', 'it', 'VIP', 'nl', 'VIP', 'pl', 'VIP', 'tr', 'VIP', 'fa', 'ویژه', 'zh-CN', 'VIP', 'vi', 'VIP', 'id', 'VIP', 'cs', 'VIP', 'ar', 'كبار الشخصيات', 'ko', 'VIP', 'uk', 'VIP', 'hu', 'VIP', 'sv', 'VIP', 'he', 'VIP')
+            WHEN (v_delta.rfm_score->>'recency')::int >= 4 AND (v_delta.rfm_score->>'frequency')::int >= 4 THEN jsonb_build_object('en', 'Champions', 'es', 'Campeones', 'de', 'Champions', 'ja', 'チャンピオン', 'fr', 'Champions', 'pt', 'Campeões', 'ru', 'Чемпионы', 'it', 'Campioni', 'nl', 'Kampioenen', 'pl', 'Mistrzowie', 'tr', 'Şampiyonlar', 'fa', 'قهرمانان', 'zh-CN', '冠军', 'vi', 'Nhà vô địch', 'id', 'Juara', 'cs', 'Šampioni', 'ar', 'الأبطال', 'ko', '챔피언', 'uk', 'Чемпіони', 'hu', 'Bajnokok', 'sv', 'Mästare', 'he', 'אלופות')
+            WHEN (v_delta.rfm_score->>'recency')::int <= 2 AND (v_delta.rfm_score->>'frequency')::int <= 2 THEN jsonb_build_object('en', 'At-Risk', 'es', 'En Riesgo', 'de', 'Gefährdet', 'ja', 'リスクあり', 'fr', 'À Risque', 'pt', 'Em Risco', 'ru', 'В Риск', 'it', 'A Rischio', 'nl', 'In Gevaar', 'pl', 'Zagrożony', 'tr', 'Riskli', 'fa', 'در معرض خطر', 'zh-CN', '有风险', 'vi', 'Có nguy cơ', 'id', 'Berisiko', 'cs', 'Ohrožený', 'ar', 'في المخاطر', 'ko', '위험', 'uk', 'Під ризиком', 'hu', 'Kockázatos', 'sv', 'I Risk', 'he', 'בסיכון')
+            WHEN (v_delta.rfm_score->>'recency')::int >= 4 AND (
+                SELECT created_at >= CURRENT_DATE - INTERVAL '30 days'
+                FROM customers
+                WHERE id = v_delta.customer_id AND merchant_id = v_delta.merchant_id
+            ) THEN jsonb_build_object('en', 'New', 'es', 'Nuevo', 'de', 'Neu', 'ja', '新規', 'fr', 'Nouveau', 'pt', 'Novo', 'ru', 'Новый', 'it', 'Nuovo', 'nl', 'Nieuw', 'pl', 'Nowy', 'tr', 'Yeni', 'fa', 'جدید', 'zh-CN', '新', 'vi', 'Mới', 'id', 'Baru', 'cs', 'Nový', 'ar', 'جديد', 'ko', '신규', 'uk', 'Новий', 'hu', 'Új', 'sv', 'Ny', 'he', 'חדש')
+            ELSE jsonb_build_object('en', 'Inactive', 'es', 'Inactivo', 'de', 'Inaktiv', 'ja', '非アクティブ', 'fr', 'Inactif', 'pt', 'Inativo', 'ru', 'Неактивный', 'it', 'Inattivo', 'nl', 'Inactief', 'pl', 'Nieaktywny', 'tr', 'Etkin Değil', 'fa', 'غیرفعال', 'zh-CN', '不活跃', 'vi', 'Không hoạt động', 'id', 'Tidak Aktif', 'cs', 'Neaktivní', 'ar', 'غير نشط', 'ko', '비활성', 'uk', 'Неактивний', 'hu', 'Inaktív', 'sv', 'Inaktiv', 'he', 'לא פעיל')
+        END;
+
+        v_conditions := jsonb_build_object(
+            'recency', v_delta.rfm_score->>'recency',
+            'frequency', v_delta.rfm_score->>'frequency',
+            'monetary', v_delta.rfm_score->>'monetary',
+            'lifecycle_stage', v_lifecycle_stage
+        );
+
+        IF v_delta.operation = 'insert' THEN
+            INSERT INTO rfm_segment_counts (merchant_id, segment_id, report_id, name, count, conditions, last_refreshed)
+            VALUES (
+                v_delta.merchant_id, v_segment_id, gen_random_uuid(), v_segment_name, 1, v_conditions, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (merchant_id, segment_id)
+            DO UPDATE SET
+                count = rfm_segment_counts.count + 1,
+                name = EXCLUDED.name,
+                conditions = EXCLUDED.conditions,
+                last_refreshed = CURRENT_TIMESTAMP;
+        ELSIF v_delta.operation = 'update' THEN
+            DECLARE
+                v_prev_segment_id VARCHAR;
+                v_prev_rfm_score JSONB;
+            BEGIN
+                SELECT rfm_score INTO v_prev_rfm_score
+                FROM rfm_score_history
+                WHERE merchant_id = v_delta.merchant_id
+                AND customer_id = v_delta.customer_id
+                AND created_at < v_delta.created_at
+                ORDER BY created_at DESC
+                LIMIT 1;
+
+                IF v_prev_rfm_score IS NOT NULL THEN
+                    v_prev_segment_id := 'seg_' || (v_prev_rfm_score->>'recency') || (v_prev_rfm_score->>'frequency') || (v_prev_rfm_score->>'monetary');
+                    UPDATE rfm_segment_counts
+                    SET count = GREATEST(count - 1, 0), last_refreshed = CURRENT_TIMESTAMP
+                    WHERE merchant_id = v_delta.merchant_id AND segment_id = v_prev_segment_id;
+                    INSERT INTO rfm_segment_counts (merchant_id, segment_id, report_id, name, count, conditions, last_refreshed)
+                    VALUES (
+                        v_delta.merchant_id, v_segment_id, gen_random_uuid(), v_segment_name, 1, v_conditions, CURRENT_TIMESTAMP
+                    )
+                    ON CONFLICT (merchant_id, segment_id)
+                    DO UPDATE SET
+                        count = rfm_segment_counts.count + 1,
+                        name = EXCLUDED.name,
+                        conditions = EXCLUDED.conditions,
+                        last_refreshed = CURRENT_TIMESTAMP;
+                END IF;
+            END;
+        ELSIF v_delta.operation = 'delete' THEN
+            UPDATE rfm_segment_counts
+            SET count = GREATEST(count - 1, 0), last_refreshed = CURRENT_TIMESTAMP
+            WHERE merchant_id = v_delta.merchant_id AND segment_id = v_segment_id;
+        END IF;
+        DELETE FROM rfm_segment_deltas WHERE id = v_delta.id;
+    END LOOP;
+
+    DELETE FROM rfm_segment_counts WHERE count = 0;
+
+    INSERT INTO analytics_reports (merchant_id, report_type, data, created_at)
+    SELECT
+        merchant_id, 'rfm_trends' AS report_type,
+        jsonb_agg(
+            jsonb_build_object(
+                'segment_id', segment_id, 'name', name, 'count', count, 'conditions', conditions
+            )
+        ) AS data,
+        CURRENT_TIMESTAMP
+    FROM rfm_segment_counts
+    GROUP BY merchant_id
+    ON CONFLICT (merchant_id, report_type)
+    DO UPDATE SET data = EXCLUDED.data, created_at = CURRENT_TIMESTAMP;
+
+    PERFORM pg_advisory_unlock(123456789);
+EXCEPTION
+    WHEN OTHERS THEN
+        INSERT INTO audit_logs (merchant_id, action, severity, metadata, created_at)
+        VALUES (
+            NULL, 'refresh_rfm_segment_counts_failed', 'critical',
+            jsonb_build_object('error', SQLERRM, 'state', SQLSTATE), CURRENT_TIMESTAMP
+        );
+        PERFORM pg_advisory_unlock(123456789);
+        RAISE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to calculate RFM scores with weighted logic and edge cases
+CREATE OR REPLACE FUNCTION calculate_rfm_score(
+    p_merchant_id UUID,
+    p_customer_id UUID,
+    p_order_count INT,
+    p_last_order_date TIMESTAMP WITH TIME ZONE,
+    p_total_spend DECIMAL,
+    p_aov DECIMAL
+) RETURNS JSONB AS $$
+DECLARE
+    v_recency INT;
+    v_frequency INT;
+    v_monetary INT;
+    v_score DECIMAL(3,1);
+    v_recency_decay VARCHAR;
+    v_lifecycle_stage VARCHAR;
+    v_thresholds JSONB;
+BEGIN
+    SELECT rfm_thresholds INTO v_thresholds
+    FROM program_settings
+    WHERE merchant_id = p_merchant_id;
+
+    v_recency_decay := v_thresholds->>'recency_decay';
+    IF v_recency_decay = 'subscription' THEN
+        v_recency := CASE
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '14 days' THEN 5
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '60 days' THEN 4
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '90 days' THEN 3
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '180 days' THEN 2
+            ELSE 1
+        END;
+    ELSE
+        v_recency := CASE
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '7 days' THEN 5
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '30 days' THEN 4
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '60 days' THEN 3
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '90 days' THEN 2
+            ELSE 1
+        END;
+    END IF;
+
+    v_frequency := CASE
+        WHEN p_order_count > (v_thresholds->>'frequency_high')::INT THEN 5
+        WHEN p_order_count >= (v_thresholds->>'frequency_medium')::INT THEN 4
+        WHEN p_order_count >= (v_thresholds->>'frequency_low')::INT THEN 3
+        WHEN p_order_count >= 2 THEN 2
+        ELSE 1
+    END;
+
+    v_monetary := CASE
+        WHEN p_total_spend > (v_thresholds->>'monetary_high')::DECIMAL * p_aov THEN 5
+        WHEN p_total_spend >= (v_thresholds->>'monetary_medium')::DECIMAL * p_aov THEN 4
+        WHEN p_total_spend >= p_aov THEN 3
+        WHEN p_total_spend >= 0.5 * p_aov THEN 2
+        ELSE 1
+    END;
+
+    IF p_order_count = 0 THEN
+        v_recency := 1; v_frequency := 1; v_monetary := 1;
+    END IF;
+    IF p_total_spend < 0 THEN
+        v_monetary := 1;
+    END IF;
+    IF p_total_spend > 10000 THEN
+        v_monetary := 5;
+    END IF;
+
+    v_score := (0.4 * v_recency + 0.3 * v_frequency + 0.3 * v_monetary)::DECIMAL(3,1);
+
+    v_lifecycle_stage := CASE
+        WHEN v_recency >= 4 AND p_order_count = 1 THEN 'new_lead'
+        WHEN v_recency >= 3 AND p_order_count >= 2 THEN 'repeat_buyer'
+        WHEN v_recency <= 2 AND p_order_count <= 2 THEN 'churned'
+        WHEN v_monetary >= 5 THEN 'vip'
+        ELSE 'inactive'
+    END;
+
+    UPDATE customers
+    SET
+        rfm_score = jsonb_build_object(
+            'recency', v_recency::TEXT, 'frequency', v_frequency::TEXT,
+            'monetary', v_monetary::TEXT, 'score', v_score
+        ),
+        metadata = jsonb_set(metadata, '{lifecycle_stage}', to_jsonb(v_lifecycle_stage)),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_customer_id AND merchant_id = p_merchant_id;
+
+    INSERT INTO rfm_score_history (merchant_id, customer_id, rfm_score, metadata, churn_score, created_at)
+    VALUES (
+        p_merchant_id, p_customer_id,
+        jsonb_build_object(
+            'recency', v_recency::TEXT, 'frequency', v_frequency::TEXT,
+            'monetary', v_monetary::TEXT, 'score', v_score
+        ),
+        jsonb_build_object('lifecycle_stage', v_lifecycle_stage),
+        NULL, CURRENT_TIMESTAMP
+    );
+
+    INSERT INTO customer_segments (merchant_id, customer_id, segment_id, name, rules, segment_ids, created_at)
+    VALUES (
+        p_merchant_id, p_customer_id,
+        'seg_' || v_recency::TEXT || v_frequency::TEXT || v_monetary::TEXT,
+        CASE
+            WHEN v_lifecycle_stage = 'churned' THEN jsonb_build_object('en', 'Churned', 'es', 'Abandonado', 'de', 'Verloren', 'ja', '離脱', 'fr', 'Perdu', 'pt', 'Abandonado', 'ru', 'Утрачен', 'it', 'Perso', 'nl', 'Verloren', 'pl', 'Stracony', 'tr', 'Kaybedilmiş', 'fa', 'از دست رفته', 'zh-CN', '流失', 'vi', 'Mất khách', 'id', 'Hilang', 'cs', 'Ztracený', 'ar', 'متوقف', 'ko', '이탈', 'uk', 'Втрачений', 'hu', 'Elvesztett', 'sv', 'Förlorad', 'he', 'אבוד')
+            WHEN v_lifecycle_stage = 'vip' THEN jsonb_build_object('en', 'VIP', 'es', 'VIP', 'de', 'VIP', 'ja', 'VIP', 'fr', 'VIP', 'pt', 'VIP', 'ru', 'VIP', 'it', 'VIP', 'nl', 'VIP', 'pl', 'VIP', 'tr', 'VIP', 'fa', 'ویژه', 'zh-CN', 'VIP', 'vi', 'VIP', 'id', 'VIP', 'cs', 'VIP', 'ar', 'كبار الشخصيات', 'ko', 'VIP', 'uk', 'VIP', 'hu', 'VIP', 'sv', 'VIP', 'he', 'VIP')
+            WHEN v_recency >= 4 AND v_frequency >= 4 THEN jsonb_build_object('en', 'Champions', 'es', 'Campeones', 'de', 'Champions', 'ja', 'チャンピオン', 'fr', 'Champions', 'pt', 'Campeões', 'ru', 'Чемпионы', 'it', 'Campioni', 'nl', 'Kampioenen', 'pl', 'Mistrzowie', 'tr', 'Şampiyonlar', 'fa', 'قهرمانان', 'zh-CN', '冠军', 'vi', 'Nhà vô địch', 'id', 'Juara', 'cs', 'Šampioni', 'ar', 'الأبطال', 'ko', '챔피언', 'uk', 'Чемпіони', 'hu', 'Bajnokok', 'sv', 'Mästare', 'he', 'אלופות')
+            WHEN v_recency <= 2 AND v_frequency <= 2 THEN jsonb_build_object('en', 'At-Risk', 'es', 'En Riesgo', 'de', 'Gefährdet', 'ja', 'リスクあり', 'fr', 'À Risque', 'pt', 'Em Risco', 'ru', 'В Риск', 'it', 'A Rischio', 'nl', 'In Gevaar', 'pl', 'Zagrożony', 'tr', 'Riskli', 'fa', 'در معرض خطر', 'zh-CN', '有风险', 'vi', 'Có nguy cơ', 'id', 'Berisiko', 'cs', 'Ohrožený', 'ar', 'في المخاطر', 'ko', '위험', 'uk', 'Під ризиком', 'hu', 'Kockázatos', 'sv', 'I Risk', 'he', 'בסיכון')
+            WHEN v_recency >= 4 AND p_order_count = 1 THEN jsonb_build_object('en', 'New', 'es', 'Nuevo', 'de', 'Neu', 'ja', '新規', 'fr', 'Nouveau', 'pt', 'Novo', 'ru', 'Новый', 'it', 'Nuovo', 'nl', 'Nieuw', 'pl', 'Nowy', 'tr', 'Yeni', 'fa', 'جدید', 'zh-CN', '新', 'vi', 'Mới', 'id', 'Baru', 'cs', 'Nový', 'ar', 'جديد', 'ko', '신규', 'uk', 'Новий', 'hu', 'Új', 'sv', 'Ny', 'he', 'חדש')
+            ELSE jsonb_build_object('en', 'Inactive', 'es', 'Inactivo', 'de', 'Inaktiv', 'ja', '非アクティブ', 'fr', 'Inactif', 'pt', 'Inativo', 'ru', 'Неактивный', 'it', 'Inattivo', 'nl', 'Inactief', 'pl', 'Nieaktywny', 'tr', 'Etkin Değil', 'fa', 'غیرفعال', 'zh-CN', '不活跃', 'vi', 'Không hoạt động', 'id', 'Tidak Aktif', 'cs', 'Neaktivní', 'ar', 'غير نشط', 'ko', '비활성', 'uk', 'Неактивний', 'hu', 'Inaktív', 'sv', 'Inaktiv', 'he', 'לא פעיל')
+        END,
+        jsonb_build_object('recency', v_recency::TEXT, 'frequency', v_frequency::TEXT, 'monetary', v_monetary::TEXT),
+        CASE WHEN v_monetary >= 5 THEN jsonb_build_array('VIP', CASE WHEN v_recency <= 2 THEN 'At-Risk High-Value' ELSE 'VIP' END)
+             ELSE jsonb_build_array(CASE
+                 WHEN v_lifecycle_stage = 'churned' THEN 'Churned'
+                 WHEN v_recency >= 4 AND v_frequency >= 4 THEN 'Champions'
+                 WHEN v_recency <= 2 AND v_frequency <= 2 THEN 'At-Risk'
+                 WHEN v_recency >= 4 AND p_order_count = 1 THEN 'New'
+                 ELSE 'Inactive'
+             END) END,
+        CURRENT_TIMESTAMP
+    )
+    ON CONFLICT (merchant_id, customer_id, segment_id)
+    DO UPDATE SET
+        name = EXCLUDED.name, rules = EXCLUDED.rules, segment_ids = EXCLUDED.segment_ids, created_at = CURRENT_TIMESTAMP;
+
+    RETURN jsonb_build_object(
+        'recency', v_recency::TEXT, 'frequency', v_frequency::TEXT, 'monetary', v_monetary::TEXT,
+        'score', v_score, 'lifecycle_stage', v_lifecycle_stage
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Merchants table: Stores merchant details with multi-language support
+CREATE TABLE merchants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_domain VARCHAR(255) NOT NULL,
+    plan VARCHAR(50) NOT NULL CHECK (plan IN ('free', 'standard', 'plus', 'enterprise')),
+    staff_roles JSONB NOT NULL DEFAULT '{}'::jsonb,
+    language JSONB NOT NULL DEFAULT jsonb_build_object(
+        'default', 'en',
+        'supported', '["en", "es", "de", "ja", "fr", "pt", "ru", "it", "nl", "pl", "tr", "fa", "zh-CN", "vi", "id", "cs", "ar", "ko", "uk", "hu", "sv", "he"]'::jsonb,
+        'rtl', '["ar", "he"]'::jsonb
+    ),
+    multi_store_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    multi_tenant_group_id UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (shop_domain),
+    CONSTRAINT valid_languages CHECK (
+        language->>'default' IN ('en', 'es', 'de', 'ja', 'fr', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'fa', 'zh-CN', 'vi', 'id', 'cs', 'ar', 'ko', 'uk', 'hu', 'sv', 'he')
+        AND language->'supported' @> '["en"]'::jsonb
+        AND language->'rtl' <@ '["ar", "he"]'::jsonb
+    )
+);
+CREATE INDEX idx_merchants_shop_domain ON merchants(shop_domain);
+CREATE INDEX idx_merchants_language ON merchants USING GIN (language);
+CREATE INDEX idx_merchants_multi_tenant_group_id ON merchants(multi_tenant_group_id);
+CREATE INDEX idx_merchants_created_at ON merchants(created_at);
+
+CREATE TRIGGER trg_normalize_shop_domain
+BEFORE INSERT OR UPDATE ON merchants
+FOR EACH ROW EXECUTE FUNCTION normalize_shop_domain();
+
+CREATE TRIGGER trg_merchants_updated_at
+BEFORE UPDATE ON merchants
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER merchants_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON merchants
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- Customers table: Stores customer data with encrypted PII and RFM scores
+CREATE TABLE customers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    shopify_customer_id VARCHAR(50) NOT NULL,
+    shared_customer_id VARCHAR(50),
+    email TEXT NOT NULL ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    first_name TEXT ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    last_name TEXT ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    rfm_score JSONB NOT NULL DEFAULT '{"recency": "1", "frequency": "1", "monetary": "1", "score": 1}'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    vip_tier_id JSONB NOT NULL DEFAULT '{}'::jsonb,
+    vip_progress JSONB NOT NULL DEFAULT '{}'::jsonb,
+    churn_score DECIMAL(5,2) ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (merchant_id, shopify_customer_id),
+    UNIQUE (shared_customer_id),
+    CONSTRAINT valid_rfm_recency CHECK (rfm_score->>'recency' IN ('1', '2', '3', '4', '5')),
+    CONSTRAINT valid_rfm_frequency CHECK (rfm_score->>'frequency' IN ('1', '2', '3', '4', '5')),
+    CONSTRAINT valid_rfm_monetary CHECK (rfm_score->>'monetary' IN ('1', '2', '3', '4', '5')),
+    CONSTRAINT valid_rfm_score CHECK ((rfm_score->>'score')::numeric BETWEEN 1 AND 5)
+);
+CREATE INDEX idx_customers_merchant_id ON customers(merchant_id);
+CREATE INDEX idx_customers_email ON customers USING HASH (email);
+CREATE INDEX idx_customers_rfm_score ON customers USING GIN (rfm_score);
+CREATE INDEX idx_customers_metadata ON customers USING GIN (metadata);
+CREATE INDEX idx_customers_vip_tier_id ON customers USING GIN (vip_tier_id);
+CREATE INDEX idx_customers_vip_progress ON customers USING GIN (vip_progress);
+CREATE INDEX idx_customers_shared_customer_id ON customers(shared_customer_id);
+CREATE INDEX idx_customers_created_at ON customers(created_at);
+CREATE INDEX idx_customers_rfm_score_at_risk ON customers(merchant_id) WHERE (rfm_score->>'score')::numeric < 2;
+
+CREATE TRIGGER trg_customers_updated_at
+BEFORE UPDATE ON customers
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER customers_rfm_segment_trigger
+AFTER INSERT OR UPDATE OR DELETE ON customers
+FOR EACH ROW EXECUTE FUNCTION trigger_rfm_segment_deltas();
+
+CREATE TRIGGER customers_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON customers
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- Customer_segments table: Stores customer segment assignments with multi-language support
+CREATE TABLE customer_segments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    segment_id VARCHAR(50) NOT NULL,
+    name JSONB NOT NULL DEFAULT '{}'::jsonb,
+    rules JSONB NOT NULL DEFAULT '{}'::jsonb,
+    segment_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_segment_name CHECK (
+        EXISTS (
+            SELECT 1
+            FROM merchants m
+            WHERE m.id = customer_segments.merchant_id
+            AND customer_segments.name ? (m.language->>'default')
+        )
+    )
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_customer_segments_merchant_id ON customer_segments(merchant_id);
+CREATE INDEX idx_customer_segments_customer_id ON customer_segments(customer_id);
+CREATE INDEX idx_customer_segments_segment_id ON customer_segments(segment_id);
+CREATE INDEX idx_customer_segments_created_at ON customer_segments(created_at);
+
+CREATE TABLE customer_segments_p0 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE customer_segments_p1 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE customer_segments_p2 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE customer_segments_p3 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE customer_segments_p4 PARTITION OF customerEAD
+customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE customer_segments_p5 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE customer_segments_p6 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE customer_segments_p7 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+CREATE TRIGGER customer_segments_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON customer_segments
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- Program_settings table: Stores merchant-specific configurations
+CREATE TABLE program_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    rfm_thresholds JSONB NOT NULL DEFAULT jsonb_build_object(
+        'recency_decay', 'default',
+        'frequency_high', '10',
+        'frequency_medium', '6',
+        'frequency_low', '4',
+        'monetary_high', '5',
+        'monetary_medium', '2'
+    )::jsonb,
+    theme_extension_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    accessibility_settings JSONB NOT NULL DEFAULT jsonb_build_object(
+        'rtl_fonts', jsonb_build_object('ar', 'Noto Sans Arabic', 'he', 'Noto Sans Hebrew'),
+        'text_alignment', jsonb_build_object('ar', 'right', 'he', 'right')
+    ),
+    shopify_flow_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    ab_tests JSONB NOT NULL DEFAULT '{}'::jsonb,
+    branding JSONB NOT NULL DEFAULT jsonb_build_object(
+        'points_label', jsonb_build_object(
+            'en', 'Points', 'es', 'Puntos', 'de', 'Punkte', 'ja', 'ポイント', 'fr', 'Points',
+            'pt', 'Pontos', 'ru', 'Очки', 'it', 'Punti', 'nl', 'Punten', 'pl', 'Punkty',
+            'tr', 'Puanlar', 'fa', 'امتیازات', 'zh-CN', '积分', 'vi', 'Điểm', 'id', 'Poin',
+            'cs', 'Body', 'ar', 'نقاط', 'ko', '포인트', 'uk', 'Бали', 'hu', 'Pontok',
+            'sv', 'Poäng', 'he', 'נקודות'
+        )
+    ),
+    simulation_params JSONB NOT NULL DEFAULT '{}'::jsonb, -- Added for RFM simulations
+    wasm_optimized BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_branding_languages CHECK (
+        EXISTS (
+            SELECT 1
+            FROM merchants m
+            WHERE m.id = program_settings.merchant_id
+            AND program_settings.branding->'points_label' ? (m.language->>'default')
+        )
+    )
+);
+CREATE INDEX idx_program_settings_merchant_id ON program_settings(merchant_id);
+CREATE INDEX idx_program_settings_branding ON program_settings USING GIN (branding);
+CREATE INDEX idx_program_settings_shopify_flow_config ON program_settings USING GIN (shopify_flow_config);
+CREATE INDEX idx_program_settings_created_at ON program_settings(created_at);
+
+CREATE TRIGGER trg_program_settings_updated_at
+BEFORE UPDATE ON program_settings
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER program_settings_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON program_settings
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- RFM_segment_deltas table: Tracks changes in RFM segments
+CREATE TABLE rfm_segment_deltas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    rfm_score JSONB NOT NULL DEFAULT '{"recency": "1", "frequency": "1", "monetary": "1", "score": 1}'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    operation VARCHAR(50) NOT NULL CHECK (operation IN ('insert', 'update', 'delete')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_rfm_segment_deltas_merchant_id ON rfm_segment_deltas(merchant_id);
+CREATE INDEX idx_rfm_segment_deltas_customer_id ON rfm_segment_deltas(customer_id);
+CREATE INDEX idx_rfm_segment_deltas_created_at ON rfm_segment_deltas(created_at);
+
+CREATE TABLE rfm_segment_deltas_p0 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE rfm_segment_deltas_p1 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE rfm_segment_deltas_p2 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE rfm_segment_deltas_p3 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE rfm_segment_deltas_p4 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE rfm_segment_deltas_p5 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE rfm_segment_deltas_p6 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE rfm_segment_deltas_p7 PARTITION OF rfm_segment_deltas FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+CREATE TRIGGER rfm_segment_deltas_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON rfm_segment_deltas
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- RFM_segment_counts table: Aggregates RFM segment counts
+CREATE TABLE rfm_segment_counts (
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    segment_id VARCHAR(50) NOT NULL,
+    report_id UUID NOT NULL,
+    name JSONB NOT NULL DEFAULT '{}'::jsonb,
+    count INT NOT NULL CHECK (count >= 0),
+    conditions JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_refreshed TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (merchant_id, segment_id)
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_rfm_segment_counts_merchant_id ON rfm_segment_counts(merchant_id);
+CREATE INDEX idx_rfm_segment_counts_segment_id ON rfm_segment_counts(segment_id);
+CREATE INDEX idx_rfm_segment_counts_report_id ON rfm_segment_counts(report_id);
+CREATE INDEX idx_rfm_segment_counts_last_refreshed ON rfm_segment_counts(last_refreshed);
+
+CREATE TABLE rfm_segment_counts_p0 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE rfm_segment_counts_p1 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE rfm_segment_counts_p2 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE rfm_segment_counts_p3 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE rfm_segment_counts_p4 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE rfm_segment_counts_p5 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE rfm_segment_counts_p6 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE rfm_segment_counts_p7 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+CREATE TRIGGER rfm_segment_counts_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON rfm_segment_counts
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- RFM_score_history table: Tracks historical RFM scores
+CREATE TABLE rfm_score_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    rfm_score JSONB NOT NULL DEFAULT '{}'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    churn_score DECIMAL(5,2),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_rfm_score_history_merchant_id ON rfm_score_history(merchant_id);
+CREATE INDEX idx_rfm_score_history_customer_id ON rfm_score_history(customer_id);
+CREATE INDEX idx_rfm_score_history_created_at ON rfm_score_history(created_at);
+
+CREATE TABLE rfm_score_history_p0 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE rfm_score_history_p1 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE rfm_score_history_p2 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE rfm_score_history_p3 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE rfm_score_history_p4 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE rfm_score_history_p5 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE rfm_score_history_p6 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE rfm_score_history_p7 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+CREATE TRIGGER rfm_score_history_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON rfm_score_history
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();

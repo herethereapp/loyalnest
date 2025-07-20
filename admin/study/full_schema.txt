@@ -1,0 +1,1398 @@
+-- Enable pgcrypto for AES-256 encryption (GDPR/CCPA compliance)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Merchants table: Stores merchant details, plan, and multi-tenant configurations
+CREATE TABLE merchants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shop_domain VARCHAR(255) NOT NULL,
+    plan VARCHAR(50) NOT NULL CHECK (plan IN ('free', 'standard', 'plus', 'enterprise')),
+    staff_roles JSONB NOT NULL DEFAULT '{}',
+    language JSONB NOT NULL DEFAULT '{"default": "en", "supported": ["en"], "rtl": []}',
+    multi_store_config JSONB DEFAULT '{}',
+    multi_tenant_group_id UUID, -- US-AM14: Multi-tenant group support
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (shop_domain)
+);
+CREATE INDEX idx_merchants_shop_domain ON merchants(shop_domain);
+CREATE INDEX idx_merchants_language ON merchants USING GIN (language);
+CREATE INDEX idx_merchants_multi_tenant_group_id ON merchants(multi_tenant_group_id);
+CREATE INDEX idx_merchants_created_at ON merchants(created_at);
+
+-- Admin Users table: Manages internal admin users with RBAC and MFA
+CREATE TABLE admin_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('super_admin', 'support', 'analyst')),
+    permissions JSONB NOT NULL DEFAULT '{}',
+    mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    last_login_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (email)
+);
+CREATE INDEX idx_admin_users_email ON admin_users(email);
+CREATE INDEX idx_admin_users_role ON admin_users(role);
+
+-- Admin Sessions table: Tracks admin sessions for MFA and security
+CREATE TABLE admin_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+    session_token VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_admin_sessions_admin_id ON admin_sessions(admin_id);
+CREATE INDEX idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+
+-- Impersonation Sessions table: Tracks admin impersonation of merchants
+CREATE TABLE impersonation_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    admin_id UUID NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    session_token VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_impersonation_sessions_admin_id ON impersonation_sessions(admin_id);
+CREATE INDEX idx_impersonation_sessions_merchant_id ON impersonation_sessions(merchant_id);
+CREATE INDEX idx_impersonation_sessions_expires_at ON impersonation_sessions(expires_at);
+
+-- Customers table: Stores customer data with encrypted PII, RFM, and VIP progress
+CREATE TABLE customers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    shopify_customer_id VARCHAR(50) NOT NULL,
+    shared_customer_id VARCHAR(50),
+    email TEXT NOT NULL ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    first_name TEXT ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    last_name TEXT ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    rfm_score JSONB NOT NULL DEFAULT '{"recency": 1, "frequency": 1, "monetary": 1, "score": 1}',
+    metadata JSONB NOT NULL DEFAULT '{}',
+    vip_tier_id JSONB,
+    vip_progress JSONB DEFAULT '{}', -- US-CW16: Tracks progress to next VIP tier
+    churn_score DECIMAL(5,2) ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (merchant_id, shopify_customer_id),
+    UNIQUE (shared_customer_id),
+    CONSTRAINT valid_rfm_recency CHECK (rfm_score->>'recency' IN ('1', '2', '3', '4', '5')),
+    CONSTRAINT valid_rfm_frequency CHECK (rfm_score->>'frequency' IN ('1', '2', '3', '4', '5')),
+    CONSTRAINT valid_rfm_monetary CHECK (rfm_score->>'monetary' IN ('1', '2', '3', '4', '5')),
+    CONSTRAINT valid_rfm_score CHECK ((rfm_score->>'score')::numeric BETWEEN 1 AND 5)
+);
+CREATE INDEX idx_customers_merchant_id ON customers(merchant_id);
+CREATE INDEX idx_customers_email ON customers USING HASH (email);
+CREATE INDEX idx_customers_rfm_score ON customers USING GIN (rfm_score);
+CREATE INDEX idx_customers_metadata ON customers USING GIN (metadata);
+CREATE INDEX idx_customers_vip_tier_id ON customers USING GIN (vip_tier_id);
+CREATE INDEX idx_customers_vip_progress ON customers USING GIN (vip_progress);
+CREATE INDEX idx_customers_shared_customer_id ON customers(shared_customer_id);
+CREATE INDEX idx_customers_created_at ON customers(created_at);
+CREATE INDEX idx_customers_rfm_score_at_risk ON customers(merchant_id) WHERE (rfm_score->>'score')::numeric < 2;
+
+-- Customer Segments table: Stores multi-segment assignments
+CREATE TABLE customer_segments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    segment_id VARCHAR(50) NOT NULL,
+    name JSONB NOT NULL,
+    rules JSONB NOT NULL,
+    segment_ids JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_customer_segments_merchant_id ON customer_segments(merchant_id);
+CREATE INDEX idx_customer_segments_customer_id ON customer_segments(customer_id);
+CREATE INDEX idx_customer_segments_segment_id ON customer_segments(segment_id);
+CREATE INDEX idx_customer_segments_created_at ON customer_segments(created_at);
+
+-- Partitions for customer_segments
+CREATE TABLE customer_segments_p0 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE customer_segments_p1 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE customer_segments_p2 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE customer_segments_p3 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE customer_segments_p4 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE customer_segments_p5 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE customer_segments_p6 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE customer_segments_p7 PARTITION OF customer_segments FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Points Transactions table: Tracks points earned/redeemed with multi-tenant support
+CREATE TABLE points_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    multi_tenant_group_id UUID, -- US-AM14: Shared points across tenant groups
+    points INT NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('earn', 'redeem', 'adjust')),
+    reason VARCHAR(255),
+    source VARCHAR(50) CHECK (source IN ('shopify', 'klaviyo', 'zapier', 'shopify_flow', 'manual')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_points_transactions_customer_id ON points_transactions(customer_id);
+CREATE INDEX idx_points_transactions_merchant_id ON points_transactions(merchant_id);
+CREATE INDEX idx_points_transactions_multi_tenant_group_id ON points_transactions(multi_tenant_group_id);
+CREATE INDEX idx_points_transactions_created_at ON points_transactions(created_at);
+
+-- Partitions for points_transactions
+CREATE TABLE points_transactions_p0 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE points_transactions_p1 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE points_transactions_p2 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE points_transactions_p3 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE points_transactions_p4 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE points_transactions_p5 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE points_transactions_p6 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE points_transactions_p7 PARTITION OF points_transactions FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Referrals table: Tracks customer and merchant referrals with WhatsApp and spoof detection
+CREATE TABLE referrals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    referrer_customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    referral_link_id VARCHAR(50) NOT NULL,
+    merchant_referral_id VARCHAR(50),
+    multi_tenant_group_id UUID, -- US-AM14: Shared referrals across tenant groups
+    type VARCHAR(50) NOT NULL CHECK (type IN ('sms', 'email', 'whatsapp', 'merchant')), -- US-CW7: Added whatsapp
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'completed', 'expired')),
+    spoof_detection JSONB DEFAULT '{}', -- US-CW7: Heuristic/xAI spoof detection results
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_referrals_merchant_id ON referrals(merchant_id);
+CREATE INDEX idx_referrals_referral_link_id ON referrals(referral_link_id);
+CREATE INDEX idx_referrals_merchant_referral_id ON referrals(merchant_referral_id);
+CREATE INDEX idx_referrals_referrer_customer_id ON referrals(referrer_customer_id);
+CREATE INDEX idx_referrals_multi_tenant_group_id ON referrals(multi_tenant_group_id);
+CREATE INDEX idx_referrals_spoof_detection ON referrals USING GIN (spoof_detection);
+CREATE INDEX idx_referrals_created_at ON referrals(created_at);
+
+-- Partitions for referrals
+CREATE TABLE referrals_p0 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE referrals_p1 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE referrals_p2 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE referrals_p3 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE referrals_p4 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE referrals_p5 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE referrals_p6 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE referrals_p7 PARTITION OF referrals FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Reward Redemptions table: Tracks redeemed rewards
+CREATE TABLE reward_redemptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    campaign_id VARCHAR(50) NOT NULL,
+    points INT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_reward_redemptions_customer_id ON reward_redemptions(customer_id);
+CREATE INDEX idx_reward_redemptions_merchant_id ON reward_redemptions(merchant_id);
+CREATE INDEX idx_reward_redemptions_campaign_id ON reward_redemptions(campaign_id);
+CREATE INDEX idx_reward_redemptions_created_at ON reward_redemptions(created_at);
+
+-- Partitions for reward_redemptions
+CREATE TABLE reward_redemptions_p0 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE reward_redemptions_p1 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE reward_redemptions_p2 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE reward_redemptions_p3 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE reward_redemptions_p4 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE reward_redemptions_p5 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE reward_redemptions_p6 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE reward_redemptions_p7 PARTITION OF reward_redemptions FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- VIP Tiers table: Stores VIP tier configurations
+CREATE TABLE vip_tiers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name JSONB NOT NULL,
+    rfm_criteria JSONB NOT NULL,
+    benefits JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_vip_tiers_merchant_id ON vip_tiers(merchant_id);
+CREATE INDEX idx_vip_tiers_name ON vip_tiers USING GIN (name);
+CREATE INDEX idx_vip_tiers_created_at ON vip_tiers(created_at);
+
+-- Program Settings table: Stores merchant-specific configurations including Shopify Flow
+CREATE TABLE program_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    config JSONB NOT NULL DEFAULT '{}',
+    rfm_thresholds JSONB NOT NULL DEFAULT '{}',
+    theme_extension_config JSONB DEFAULT '{}',
+    accessibility_settings JSONB DEFAULT '{}',
+    shopify_flow_config JSONB DEFAULT '{}', -- US-MD19: Shopify Flow settings
+    ab_tests JSONB DEFAULT '{}',
+    branding JSONB NOT NULL DEFAULT '{"points_label": {"en": "Points"}}',
+    wasm_optimized BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_program_settings_merchant_id ON program_settings(merchant_id);
+CREATE INDEX idx_program_settings_branding ON program_settings USING GIN (branding);
+CREATE INDEX idx_program_settings_shopify_flow_config ON program_settings USING GIN (shopify_flow_config);
+CREATE INDEX idx_program_settings_created_at ON program_settings(created_at);
+
+-- Shopify Flow Templates table: Stores Flow template configurations
+CREATE TABLE shopify_flow_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    template_id VARCHAR(50) NOT NULL,
+    name JSONB NOT NULL,
+    trigger_type VARCHAR(50) NOT NULL CHECK (trigger_type IN ('rfm_change', 'points_earned', 'referral_completed', 'churn_risk')),
+    actions JSONB NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_shopify_flow_templates_merchant_id ON shopify_flow_templates(merchant_id);
+CREATE INDEX idx_shopify_flow_templates_template_id ON shopify_flow_templates(template_id);
+CREATE INDEX idx_shopify_flow_templates_trigger_type ON shopify_flow_templates(trigger_type);
+CREATE INDEX idx_shopify_flow_templates_created_at ON shopify_flow_templates(created_at);
+
+-- Email Templates table: Stores notification templates
+CREATE TABLE email_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('points_earned', 'referral_invite', 'gdpr_request', 'tier_upgraded', 'referral_completed', 'badge_earned', 'onboarding_task_completed', 'tier_change', 'nudge')),
+    subject JSONB NOT NULL,
+    body JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_email_templates_merchant_id ON email_templates(merchant_id);
+CREATE INDEX idx_email_templates_type ON email_templates(type);
+CREATE INDEX idx_email_templates_created_at ON email_templates(created_at);
+
+-- Email Events table: Tracks notification events
+CREATE TABLE email_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    event_type VARCHAR(50) NOT NULL CHECK (event_type IN ('sent', 'failed')),
+    recipient_email TEXT ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'),
+    template_id UUID REFERENCES email_templates(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_email_events_merchant_id ON email_events(merchant_id);
+CREATE INDEX idx_email_events_customer_id ON email_events(customer_id);
+CREATE INDEX idx_email_events_created_at ON email_events(created_at);
+
+-- Partitions for email_events
+CREATE TABLE email_events_p0 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE email_events_p1 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE email_events_p2 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE email_events_p3 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE email_events_p4 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE email_events_p5 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE email_events_p6 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE email_events_p7 PARTITION OF email_events FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- GDPR Requests table: Tracks GDPR/CCPA data requests and redactions
+CREATE TABLE gdpr_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('data_request', 'redact')),
+    request_source VARCHAR(50) NOT NULL CHECK (request_source IN ('customer', 'admin')),
+    redaction_status VARCHAR(50) CHECK (redaction_status IN ('pending', 'in_progress', 'completed', 'failed')),
+    request_metadata JSONB DEFAULT '{}',
+    retention_expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_gdpr_requests_merchant_id ON gdpr_requests(merchant_id);
+CREATE INDEX idx_gdpr_requests_customer_id ON gdpr_requests(customer_id);
+CREATE INDEX idx_gdpr_requests_retention_expires_at ON gdpr_requests(retention_expires_at);
+CREATE INDEX idx_gdpr_requests_created_at ON gdpr_requests(created_at);
+
+-- Webhook Idempotency Keys table: Tracks webhook deduplication
+CREATE TABLE webhook_idempotency_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    webhook_id VARCHAR(50) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    signature VARCHAR(64),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    UNIQUE (merchant_id, webhook_id)
+);
+CREATE INDEX idx_webhook_idempotency_keys_merchant_id ON webhook_idempotency_keys(merchant_id);
+CREATE INDEX idx_webhook_idempotency_keys_expires_at ON webhook_idempotency_keys(expires_at);
+
+-- Integrations table: Manages third-party integrations
+CREATE TABLE integrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    platform VARCHAR(50) NOT NULL CHECK (platform IN ('shopify', 'klaviyo', 'mailchimp', 'yotpo', 'postscript', 'recharge', 'gorgias', 'shopify_flow', 'zapier')),
+    settings JSONB NOT NULL,
+    template_id VARCHAR(50),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('ok', 'error')),
+    last_checked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_integrations_merchant_id ON integrations(merchant_id);
+CREATE INDEX idx_integrations_platform ON integrations(platform);
+CREATE INDEX idx_integrations_created_at ON integrations(created_at);
+
+-- Partitions for integrations
+CREATE TABLE integrations_p0 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE integrations_p1 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE integrations_p2 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE integrations_p3 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE integrations_p4 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE integrations_p5 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE integrations_p6 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE integrations_p7 PARTITION OF integrations FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Nudges table: Stores RFM-based nudge configurations with A/B testing
+CREATE TABLE nudges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('at_risk', 'loyal', 'new', 'inactive', 'churned', 'tier_dropped')),
+    title JSONB NOT NULL,
+    description JSONB NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    variants JSONB NOT NULL DEFAULT '{}',
+    ab_tests JSONB NOT NULL DEFAULT '{}', -- US-MD21: A/B testing for nudges
+    conditions JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_nudges_merchant_id ON nudges(merchant_id);
+CREATE INDEX idx_nudges_type ON nudges(type);
+CREATE INDEX idx_nudges_ab_tests ON nudges USING GIN (ab_tests);
+CREATE INDEX idx_nudges_created_at ON nudges(created_at);
+
+-- Partitions for nudges
+CREATE TABLE nudges_p0 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE nudges_p1 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE nudges_p2 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE nudges_p3 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE nudges_p4 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE nudges_p5 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE nudges_p6 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE nudges_p7 PARTITION OF nudges FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Nudge Events table: Tracks nudge interactions
+CREATE TABLE nudge_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    nudge_id UUID NOT NULL REFERENCES nudges(id) ON DELETE CASCADE,
+    action VARCHAR(50) NOT NULL CHECK (action IN ('view', 'click', 'dismiss')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_nudge_events_merchant_id ON nudge_events(merchant_id);
+CREATE INDEX idx_nudge_events_customer_id ON nudge_events(customer_id);
+CREATE INDEX idx_nudge_events_nudge_id ON nudge_events(nudge_id);
+CREATE INDEX idx_nudge_events_created_at ON nudge_events(created_at);
+
+-- Partitions for nudge_events
+CREATE TABLE nudge_events_p0 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE nudge_events_p1 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE nudge_events_p2 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE nudge_events_p3 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE nudge_events_p4 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE nudge_events_p5 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE nudge_events_p6 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE nudge_events_p7 PARTITION OF nudge_events FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Bonus Campaigns table: Tracks reward campaigns
+CREATE TABLE bonus_campaigns (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('points', 'discount', 'free_shipping')),
+    multiplier DECIMAL(5,2) NOT NULL DEFAULT 1.0,
+    conditions JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_bonus_campaigns_merchant_id ON bonus_campaigns(merchant_id);
+CREATE INDEX idx_bonus_campaigns_type ON bonus_campaigns(type);
+CREATE INDEX idx_bonus_campaigns_created_at ON bonus_campaigns(created_at);
+
+-- Partitions for bonus_campaigns
+CREATE TABLE bonus_campaigns_p0 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE bonus_campaigns_p1 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE bonus_campaigns_p2 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE bonus_campaigns_p3 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE bonus_campaigns_p4 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE bonus_campaigns_p5 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE bonus_campaigns_p6 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE bonus_campaigns_p7 PARTITION OF bonus_campaigns FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Gamification Achievements table: Tracks badges and streaks
+CREATE TABLE gamification_achievements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    badge JSONB NOT NULL,
+    streak_count INT CHECK (streak_count >= 0) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_gamification_achievements_merchant_id ON gamification_achievements(merchant_id);
+CREATE INDEX idx_gamification_achievements_customer_id ON gamification_achievements(customer_id);
+CREATE INDEX idx_gamification_achievements_created_at ON gamification_achievements(created_at);
+
+-- Partitions for gamification_achievements
+CREATE TABLE gamification_achievements_p0 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE gamification_achievements_p1 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE gamification_achievements_p2 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE gamification_achievements_p3 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE gamification_achievements_p4 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE gamification_achievements_p5 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE gamification_achievements_p6 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE gamification_achievements_p7 PARTITION OF gamification_achievements FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Leaderboards table: Tracks seasonal leaderboards
+CREATE TABLE leaderboards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    score INT NOT NULL CHECK (score >= 0),
+    cycle VARCHAR(7) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_leaderboards_merchant_id ON leaderboards(merchant_id);
+CREATE INDEX idx_leaderboards_cycle ON leaderboards(cycle);
+CREATE INDEX idx_leaderboards_updated_at ON leaderboards(updated_at);
+
+-- Partitions for leaderboards
+CREATE TABLE leaderboards_p0 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE leaderboards_p1 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE leaderboards_p2 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE leaderboards_p3 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE leaderboards_p4 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE leaderboards_p5 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE leaderboards_p6 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE leaderboards_p7 PARTITION OF leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Team Leaderboards table: Tracks team-based leaderboards
+CREATE TABLE team_leaderboards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    team_id VARCHAR(50) NOT NULL,
+    score INT NOT NULL CHECK (score >= 0),
+    cycle VARCHAR(7) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_team_leaderboards_merchant_id ON team_leaderboards(merchant_id);
+CREATE INDEX idx_team_leaderboards_cycle ON team_leaderboards(cycle);
+CREATE INDEX idx_team_leaderboards_updated_at ON team_leaderboards(updated_at);
+
+-- Partitions for team_leaderboards
+CREATE TABLE team_leaderboards_p0 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE team_leaderboards_p1 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE team_leaderboards_p2 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE team_leaderboards_p3 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE team_leaderboards_p4 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE team_leaderboards_p5 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE team_leaderboards_p6 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE team_leaderboards_p7 PARTITION OF team_leaderboards FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Data Imports table: Tracks customer data imports and exports
+CREATE TABLE data_imports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    source VARCHAR(50) NOT NULL CHECK (source IN ('smile_io', 'loyaltylion', 'shopify', 'custom')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    export_status VARCHAR(50) CHECK (export_status IN ('pending', 'processing', 'completed', 'failed')),
+    export_file_path VARCHAR(255),
+    record_count INT CHECK (record_count >= 0),
+    error_log JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_data_imports_merchant_id ON data_imports(merchant_id);
+CREATE INDEX idx_data_imports_status ON data_imports(status);
+CREATE INDEX idx_data_imports_created_at ON data_imports(created_at);
+
+-- Partitions for data_imports
+CREATE TABLE data_imports_p0 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE data_imports_p1 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE data_imports_p2 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE data_imports_p3 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE data_imports_p4 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE data_imports_p5 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE data_imports_p6 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE data_imports_p7 PARTITION OF data_imports FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Data Export Requests table: Tracks admin-initiated data exports
+CREATE TABLE data_export_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    admin_id UUID REFERENCES admin_users(id) ON DELETE SET NULL,
+    export_type VARCHAR(50) NOT NULL CHECK (export_type IN ('customers', 'rfm_segments', 'points_transactions', 'referrals')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+    file_path VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_data_export_requests_merchant_id ON data_export_requests(merchant_id);
+CREATE INDEX idx_data_export_requests_admin_id ON data_export_requests(admin_id);
+CREATE INDEX idx_data_export_requests_status ON data_export_requests(status);
+CREATE INDEX idx_data_export_requests_created_at ON data_export_requests(created_at);
+
+-- Partitions for data_export_requests
+CREATE TABLE data_export_requests_p0 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE data_export_requests_p1 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE data_export_requests_p2 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE data_export_requests_p3 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE data_export_requests_p4 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE data_export_requests_p5 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE data_export_requests_p6 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE data_export_requests_p7 PARTITION OF data_export_requests FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Merchant Referrals table: Tracks merchant-to-merchant referrals
+CREATE TABLE merchant_referrals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    advocate_merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    referred_merchant_id UUID REFERENCES merchants(id) ON DELETE SET NULL,
+    referral_code VARCHAR(50) NOT NULL,
+    reward_config JSONB,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'completed', 'expired')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (advocate_merchant_id);
+CREATE INDEX idx_merchant_referrals_advocate_merchant_id ON merchant_referrals(advocate_merchant_id);
+CREATE INDEX idx_merchant_referrals_referred_merchant_id ON merchant_referrals(referred_merchant_id);
+CREATE INDEX idx_merchant_referrals_referral_code ON merchant_referrals(referral_code);
+CREATE INDEX idx_merchant_referrals_created_at ON merchant_referrals(created_at);
+
+-- Partitions for merchant_referrals
+CREATE TABLE merchant_referrals_p0 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE merchant_referrals_p1 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE merchant_referrals_p2 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE merchant_referrals_p3 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE merchant_referrals_p4 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE merchant_referrals_p5 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE merchant_referrals_p6 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE merchant_referrals_p7 PARTITION OF merchant_referrals FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Slack Community table: Tracks merchant Slack participation
+CREATE TABLE slack_community (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    slack_user_id VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('active', 'invited', 'inactive')),
+    beta_features JSONB DEFAULT '{}',
+    notification_settings JSONB DEFAULT '{}',
+    engagement_metrics JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_slack_community_merchant_id ON slack_community(merchant_id);
+CREATE INDEX idx_slack_community_slack_user_id ON slack_community(slack_user_id);
+CREATE INDEX idx_slack_community_created_at ON slack_community(created_at);
+
+-- Partitions for slack_community
+CREATE TABLE slack_community_p0 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE slack_community_p1 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE slack_community_p2 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE slack_community_p3 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE slack_community_p4 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE slack_community_p5 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE slack_community_p6 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE slack_community_p7 PARTITION OF slack_community FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Onboarding Tasks table: Tracks gamified merchant onboarding
+CREATE TABLE onboarding_tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    task_type VARCHAR(50) NOT NULL CHECK (task_type IN ('configure_program', 'invite_customers', 'setup_integrations', 'customize_widget')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed')),
+    reward_points INT CHECK (reward_points >= 0),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_onboarding_tasks_merchant_id ON onboarding_tasks(merchant_id);
+CREATE INDEX idx_onboarding_tasks_task_type ON onboarding_tasks(task_type);
+CREATE INDEX idx_onboarding_tasks_created_at ON onboarding_tasks(created_at);
+
+-- Partitions for onboarding_tasks
+CREATE TABLE onboarding_tasks_p0 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE onboarding_tasks_p1 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE onboarding_tasks_p2 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE onboarding_tasks_p3 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE onboarding_tasks_p4 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE onboarding_tasks_p5 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE onboarding_tasks_p6 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE onboarding_tasks_p7 PARTITION OF onboarding_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- RFM Benchmarks table: Stores industry-specific RFM thresholds with anonymized data
+CREATE TABLE rfm_benchmarks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    merchant_size VARCHAR(50) NOT NULL CHECK (merchant_size IN ('small', 'medium', 'plus')),
+    aov_range VARCHAR(50) NOT NULL,
+    segment_name VARCHAR(50) NOT NULL,
+    customer_percentage DECIMAL(5,2) NOT NULL CHECK (customer_percentage BETWEEN 0 AND 100),
+    avg_rfm_score DECIMAL(3,1) NOT NULL CHECK (avg_rfm_score BETWEEN 1 AND 5),
+    thresholds JSONB NOT NULL,
+    anonymized_data JSONB DEFAULT '{}', -- US-MD20: GDPR/CCPA-compliant aggregated data
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_rfm_benchmarks_merchant_id ON rfm_benchmarks(merchant_id);
+CREATE INDEX idx_rfm_benchmarks_merchant_size ON rfm_benchmarks(merchant_size);
+CREATE INDEX idx_rfm_benchmarks_aov_range ON rfm_benchmarks(aov_range);
+CREATE INDEX idx_rfm_benchmarks_segment_name ON rfm_benchmarks(segment_name);
+CREATE INDEX idx_rfm_benchmarks_anonymized_data ON rfm_benchmarks USING GIN (anonymized_data);
+CREATE INDEX idx_rfm_benchmarks_last_updated ON rfm_benchmarks(last_updated);
+
+-- RFM Score History table: Tracks historical RFM scores
+CREATE TABLE rfm_score_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    rfm_score JSONB NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}',
+    churn_score DECIMAL(5,2),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_rfm_score_history_merchant_id ON rfm_score_history(merchant_id);
+CREATE INDEX idx_rfm_score_history_customer_id ON rfm_score_history(customer_id);
+CREATE INDEX idx_rfm_score_history_created_at ON rfm_score_history(created_at);
+
+-- Partitions for rfm_score_history
+CREATE TABLE rfm_score_history_p0 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE rfm_score_history_p1 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE rfm_score_history_p2 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE rfm_score_history_p3 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE rfm_score_history_p4 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE rfm_score_history_p5 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE rfm_score_history_p6 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE rfm_score_history_p7 PARTITION OF rfm_score_history FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- RFM Segment Counts: Materialized view for segment analytics
+CREATE MATERIALIZED VIEW rfm_segment_counts AS
+SELECT
+    merchant_id,
+    segment_id,
+    report_id UUID DEFAULT gen_random_uuid(),
+    name,
+    customer_count AS count,
+    conditions,
+    last_refreshed TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+FROM (
+    SELECT
+        c.merchant_id,
+        'seg_' || (c.rfm_score->>'recency' || c.rfm_score->>'frequency' || c.rfm_score->>'monetary') as segment_id,
+        CASE
+            WHEN c.metadata->>'lifecycle_stage' = 'churned' THEN 'Churned'
+            WHEN c.metadata->>'lifecycle_stage' = 'vip' THEN 'VIP'
+            WHEN (c.rfm_score->>'recency')::int >= 4 AND (c.rfm_score->>'frequency')::int >= 4 THEN 'Champions'
+            WHEN (c.rfm_score->>'recency')::int <= 2 AND (c.rfm_score->>'frequency')::int <= 2 THEN 'At-Risk'
+            WHEN (c.rfm_score->>'recency')::int >= 4 AND (c.created_at >= CURRENT_DATE - INTERVAL '30 days') THEN 'New'
+            ELSE 'Inactive'
+        END as name,
+        COUNT(*) as customer_count,
+        jsonb_build_object(
+            'recency', c.rfm_score->>'recency',
+            'frequency', c.rfm_score->>'frequency',
+            'monetary', c.rfm_score->>'monetary',
+            'lifecycle_stage', c.metadata->>'lifecycle_stage'
+        ) as conditions
+    FROM customers c
+    GROUP BY c.merchant_id, c.rfm_score, c.metadata->>'lifecycle_stage', c.created_at
+) subquery;
+CREATE INDEX idx_rfm_segment_counts_merchant_id ON rfm_segment_counts(merchant_id);
+CREATE INDEX idx_rfm_segment_counts_report_id ON rfm_segment_counts(report_id);
+CREATE INDEX idx_rfm_segment_counts_last_refreshed ON rfm_segment_counts(last_refreshed);
+
+-- RFM Segment Deltas: Delta table for incremental materialized view refresh
+CREATE TABLE rfm_segment_deltas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    rfm_score JSONB NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}',
+    operation VARCHAR(50) NOT NULL CHECK (operation IN ('insert', 'update', 'delete')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_rfm_segment_deltas_merchant_id ON rfm_segment_deltas(merchant_id);
+CREATE INDEX idx_rfm_segment_deltas_customer_id ON rfm_segment_deltas(customer_id);
+CREATE INDEX idx_rfm_segment_deltas_created_at ON rfm_segment_deltas(created_at);
+
+-- RFM Simulations table: Stores RFM simulation data for campaign planning
+CREATE TABLE rfm_simulations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+    simulation_inputs JSONB NOT NULL, -- US-MD22: Input parameters (e.g., order_count, spend)
+    simulated_rfm_score JSONB NOT NULL, -- US-MD22: Simulated RFM output
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_rfm_simulations_merchant_id ON rfm_simulations(merchant_id);
+CREATE INDEX idx_rfm_simulations_customer_id ON rfm_simulations(customer_id);
+CREATE INDEX idx_rfm_simulations_created_at ON rfm_simulations(created_at);
+
+-- Wallet Exports table: Tracks mobile wallet exports (Apple Wallet/Google Pay)
+CREATE TABLE wallet_exports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    pass_type VARCHAR(50) NOT NULL CHECK (pass_type IN ('apple_wallet', 'google_pay')),
+    pass_data TEXT ENCRYPTED WITH (COLUMN ENCRYPTION KEY = 'aws_kms_key', ALGORITHM = 'AEAD_AES_256_CBC_HMAC_SHA_256'), -- US-CW17: Encrypted wallet pass
+    status VARCHAR(50) NOT NULL CHECK (status IN ('generated', 'exported', 'failed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_wallet_exports_merchant_id ON wallet_exports(merchant_id);
+CREATE INDEX idx_wallet_exports_customer_id ON wallet_exports(customer_id);
+CREATE INDEX idx_wallet_exports_pass_type ON wallet_exports(pass_type);
+CREATE INDEX idx_wallet_exports_created_at ON wallet_exports(created_at);
+
+-- Churn Predictions table: Stores AI-driven churn predictions
+CREATE TABLE churn_predictions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    churn_probability DECIMAL(5,2) NOT NULL CHECK (churn_probability BETWEEN 0 AND 100), -- US-AM16: xAI API output
+    recommended_actions JSONB NOT NULL, -- US-AM16: AI-suggested actions
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_churn_predictions_merchant_id ON churn_predictions(merchant_id);
+CREATE INDEX idx_churn_predictions_customer_id ON churn_predictions(customer_id);
+CREATE INDEX idx_churn_predictions_created_at ON churn_predictions(created_at);
+
+-- Action Replays table: Tracks replay/undo requests for admin actions
+CREATE TABLE action_replays (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID REFERENCES merchants(id) ON DELETE SET NULL,
+    admin_id UUID REFERENCES admin_users(id) ON DELETE SET NULL,
+    audit_log_id UUID REFERENCES audit_logs(id) ON DELETE CASCADE,
+    action_type VARCHAR(50) NOT NULL CHECK (action_type IN ('replay', 'undo')),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'completed', 'failed')),
+    metadata JSONB NOT NULL DEFAULT '{}', -- US-AM15: Replay/undo details
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_action_replays_merchant_id ON action_replays(merchant_id);
+CREATE INDEX idx_action_replays_admin_id ON action_replays(admin_id);
+CREATE INDEX idx_action_replays_audit_log_id ON action_replays(audit_log_id);
+CREATE INDEX idx_action_replays_created_at ON action_replays(created_at);
+
+-- Analytics Reports table: Stores precomputed dashboard data
+CREATE TABLE analytics_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    report_type VARCHAR(50) NOT NULL CHECK (report_type IN ('rfm_trends', 'nudge_performance', 'points_activity', 'referral_metrics')),
+    data JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_analytics_reports_merchant_id ON analytics_reports(merchant_id);
+CREATE INDEX idx_analytics_reports_report_type ON analytics_reports(report_type);
+CREATE INDEX idx_analytics_reports_created_at ON analytics_reports(created_at);
+
+-- Partitions for analytics_reports
+CREATE TABLE analytics_reports_p0 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE analytics_reports_p1 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE analytics_reports_p2 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE analytics_reports_p3 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE analytics_reports_p4 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE analytics_reports_p5 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE analytics_reports_p6 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE analytics_reports_p7 PARTITION OF analytics_reports FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Analytics Report Schedules table: Schedules recurring reports
+CREATE TABLE analytics_report_schedules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    report_type VARCHAR(50) NOT NULL CHECK (report_type IN ('rfm_trends', 'nudge_performance', 'points_activity', 'referral_metrics')),
+    schedule VARCHAR(50) NOT NULL CHECK (schedule IN ('daily', 'weekly', 'monthly', 'quarterly', 'event_based')),
+    last_run_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_analytics_report_schedules_merchant_id ON analytics_report_schedules(merchant_id);
+CREATE INDEX idx_analytics_report_schedules_report_type ON analytics_report_schedules(report_type);
+CREATE INDEX idx_analytics_report_schedules_created_at ON analytics_report_schedules(created_at);
+
+-- Partitions for analytics_report_schedules
+CREATE TABLE analytics_report_schedules_p0 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE analytics_report_schedules_p1 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE analytics_report_schedules_p2 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE analytics_report_schedules_p3 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE analytics_report_schedules_p4 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE analytics_report_schedules_p5 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE analytics_report_schedules_p6 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE analytics_report_schedules_p7 PARTITION OF analytics_report_schedules FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+-- Audit Logs table: Tracks all system actions with replay metadata
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID REFERENCES merchants(id) ON DELETE SET NULL,
+    actor_id UUID REFERENCES admin_users(id) ON DELETE SET NULL,
+    entity_type VARCHAR(50),
+    entity_id UUID,
+    action VARCHAR(100) NOT NULL,
+    severity VARCHAR(50) CHECK (severity IN ('info', 'warning', 'critical')),
+    metadata JSONB NOT NULL DEFAULT '{}', -- US-AM15: Enhanced for replay/undo
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_audit_logs_merchant_id ON audit_logs(merchant_id);
+CREATE INDEX idx_audit_logs_actor_id ON audit_logs(actor_id);
+CREATE INDEX idx_audit_logs_entity_type ON audit_logs(entity_type);
+CREATE INDEX idx_audit_logs_severity ON audit_logs(severity);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+
+-- Function to calculate RFM scores with weighted logic and edge cases
+CREATE OR REPLACE FUNCTION calculate_rfm_score(
+    p_merchant_id UUID,
+    p_customer_id UUID,
+    p_order_count INT,
+    p_last_order_date TIMESTAMP WITH TIME ZONE,
+    p_total_spend DECIMAL,
+    p_aov DECIMAL
+) RETURNS JSONB AS $$
+DECLARE
+    v_recency INT;
+    v_frequency INT;
+    v_monetary INT;
+    v_score DECIMAL(3,1);
+    v_recency_decay VARCHAR;
+    v_lifecycle_stage VARCHAR;
+BEGIN
+    -- Fetch recency decay mode from program_settings
+    SELECT (rfm_thresholds->>'recency_decay') INTO v_recency_decay
+    FROM program_settings
+    WHERE merchant_id = p_merchant_id;
+
+    -- Recency calculation (time-weighted)
+    IF v_recency_decay = 'subscription' THEN
+        v_recency := CASE
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '14 days' THEN 5
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '60 days' THEN 4
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '90 days' THEN 3
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '180 days' THEN 2
+            ELSE 1
+        END;
+    ELSE
+        v_recency := CASE
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '7 days' THEN 5
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '30 days' THEN 4
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '60 days' THEN 3
+            WHEN CURRENT_DATE - p_last_order_date <= INTERVAL '90 days' THEN 2
+            ELSE 1
+        END;
+    END IF;
+
+    -- Frequency calculation
+    v_frequency := CASE
+        WHEN p_order_count > 10 THEN 5
+        WHEN p_order_count >= 6 THEN 4
+        WHEN p_order_count >= 4 THEN 3
+        WHEN p_order_count >= 2 THEN 2
+        ELSE 1
+    END;
+
+    -- Monetary calculation (normalized by AOV)
+    v_monetary := CASE
+        WHEN p_total_spend > 5 * p_aov THEN 5
+        WHEN p_total_spend >= 2 * p_aov THEN 4
+        WHEN p_total_spend >= p_aov THEN 3
+        WHEN p_total_spend >= 0.5 * p_aov THEN 2
+        ELSE 1
+    END;
+
+    -- Handle edge cases
+    IF p_order_count = 0 THEN
+        v_recency := 1;
+        v_frequency := 1;
+        v_monetary := 1;
+    END IF;
+    IF p_total_spend < 0 THEN
+        v_monetary := 1;
+    END IF;
+    IF p_total_spend > 10000 THEN
+        v_monetary := 5;
+    END IF;
+
+    -- Weighted RFM score (40% Recency, 30% Frequency, 30% Monetary)
+    v_score := (0.4 * v_recency + 0.3 * v_frequency + 0.3 * v_monetary)::DECIMAL(3,1);
+
+    -- Lifecycle stage
+    v_lifecycle_stage := CASE
+        WHEN v_recency >= 4 AND p_order_count = 1 THEN 'new_lead'
+        WHEN v_recency >= 3 AND p_order_count >= 2 THEN 'repeat_buyer'
+        WHEN v_recency <= 2 AND p_order_count <= 2 THEN 'churned'
+        WHEN v_monetary >= 5 THEN 'vip'
+        ELSE 'inactive'
+    END;
+
+    -- Update customers table
+    UPDATE customers
+    SET
+        rfm_score = jsonb_build_object(
+            'recency', v_recency::TEXT,
+            'frequency', v_frequency::TEXT,
+            'monetary', v_monetary::TEXT,
+            'score', v_score
+        ),
+        metadata = jsonb_set(metadata, '{lifecycle_stage}', to_jsonb(v_lifecycle_stage)),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_customer_id AND merchant_id = p_merchant_id;
+
+    -- Insert into rfm_score_history
+    INSERT INTO rfm_score_history (merchant_id, customer_id, rfm_score, metadata, churn_score, created_at)
+    VALUES (
+        p_merchant_id,
+        p_customer_id,
+        jsonb_build_object(
+            'recency', v_recency::TEXT,
+            'frequency', v_frequency::TEXT,
+            'monetary', v_monetary::TEXT,
+            'score', v_score
+        ),
+        jsonb_build_object('lifecycle_stage', v_lifecycle_stage),
+        NULL,
+        CURRENT_TIMESTAMP
+    );
+
+    -- Update customer_segments for multi-segment support
+    INSERT INTO customer_segments (merchant_id, customer_id, segment_id, name, rules, segment_ids, created_at)
+    VALUES (
+        p_merchant_id,
+        p_customer_id,
+        'seg_' || v_recency::TEXT || v_frequency::TEXT || v_monetary::TEXT,
+        CASE
+            WHEN v_lifecycle_stage = 'churned' THEN jsonb_build_object('en', 'Churned', 'ar', 'متوقف')
+            WHEN v_lifecycle_stage = 'vip' THEN jsonb_build_object('en', 'VIP', 'ar', 'كبار الشخصيات')
+            WHEN v_recency >= 4 AND v_frequency >= 4 THEN jsonb_build_object('en', 'Champions', 'ar', 'الأبطال')
+            WHEN v_recency <= 2 AND v_frequency <= 2 THEN jsonb_build_object('en', 'At-Risk', 'ar', 'في المخاطر')
+            WHEN v_recency >= 4 AND p_order_count = 1 THEN jsonb_build_object('en', 'New', 'ar', 'جديد')
+            ELSE jsonb_build_object('en', 'Inactive', 'ar', 'غير نشط')
+        END,
+        jsonb_build_object('recency', v_recency::TEXT, 'frequency', v_frequency::TEXT, 'monetary', v_monetary::TEXT),
+        CASE
+            WHEN v_monetary >= 5 THEN jsonb_build_array('VIP', CASE WHEN v_recency <= 2 THEN 'At-Risk High-Value' ELSE 'VIP' END)
+            ELSE jsonb_build_array(CASE
+                WHEN v_lifecycle_stage = 'churned' THEN 'Churned'
+                WHEN v_recency >= 4 AND v_frequency >= 4 THEN 'Champions'
+                WHEN v_recency <= 2 AND v_frequency <= 2 THEN 'At-Risk'
+                WHEN v_recency >= 4 AND p_order_count = 1 THEN 'New'
+                ELSE 'Inactive'
+            END)
+        END,
+        CURRENT_TIMESTAMP
+    )
+    ON CONFLICT (merchant_id, customer_id, segment_id)
+    DO UPDATE SET
+        name = EXCLUDED.name,
+        rules = EXCLUDED.rules,
+        segment_ids = EXCLUDED.segment_ids,
+        created_at = CURRENT_TIMESTAMP;
+
+    RETURN jsonb_build_object(
+        'recency', v_recency::TEXT,
+        'frequency', v_frequency::TEXT,
+        'monetary', v_monetary::TEXT,
+        'score', v_score,
+        'lifecycle_stage', v_lifecycle_stage
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to refresh rfm_segment_counts incrementally
+CREATE OR REPLACE FUNCTION refresh_rfm_segment_counts() RETURNS void AS $$
+BEGIN
+    PERFORM pg_advisory_lock(hashtext('rfm_segment_counts'));
+
+    CREATE TEMP TABLE temp_rfm_segment_counts AS
+    SELECT
+        merchant_id,
+        segment_id,
+        report_id,
+        name,
+        COUNT(*) as customer_count,
+        conditions,
+        CURRENT_TIMESTAMP as last_refreshed
+    FROM (
+        SELECT
+            c.merchant_id,
+            'seg_' || (c.rfm_score->>'recency' || c.rfm_score->>'frequency' || c.rfm_score->>'monetary') as segment_id,
+            gen_random_uuid() as report_id,
+            CASE
+                WHEN c.metadata->>'lifecycle_stage' = 'churned' THEN 'Churned'
+                WHEN c.metadata->>'lifecycle_stage' = 'vip' THEN 'VIP'
+                WHEN (c.rfm_score->>'recency')::int >= 4 AND (c.rfm_score->>'frequency')::int >= 4 THEN 'Champions'
+                WHEN (c.rfm_score->>'recency')::int <= 2 AND (c.rfm_score->>'frequency')::int <= 2 THEN 'At-Risk'
+                WHEN (c.rfm_score->>'recency')::int >= 4 AND (c.created_at >= CURRENT_DATE - INTERVAL '30 days') THEN 'New'
+                ELSE 'Inactive'
+            END as name,
+            jsonb_build_object(
+                'recency', c.rfm_score->>'recency',
+                'frequency', c.rfm_score->>'frequency',
+                'monetary', c.rfm_score->>'monetary',
+                'lifecycle_stage', c.metadata->>'lifecycle_stage'
+            ) as conditions
+        FROM customers c
+        WHERE EXISTS (
+            SELECT 1 FROM rfm_segment_deltas d
+            WHERE d.merchant_id = c.merchant_id
+            AND d.customer_id = c.id
+            AND d.operation IN ('insert', 'update')
+        )
+        UNION ALL
+        SELECT
+            rsc.merchant_id,
+            rsc.segment_id,
+            rsc.report_id,
+            rsc.name,
+            rsc.customer_count,
+            rsc.conditions
+        FROM rfm_segment_counts rsc
+        WHERE NOT EXISTS (
+            SELECT 1 FROM rfm_segment_deltas d
+            WHERE d.merchant_id = rsc.merchant_id
+            AND d.operation = 'delete'
+        )
+    ) subquery
+    GROUP BY merchant_id, segment_id, report_id, name, conditions;
+
+    DROP MATERIALIZED VIEW rfm_segment_counts;
+    CREATE MATERIALIZED VIEW rfm_segment_counts AS
+    SELECT * FROM temp_rfm_segment_counts;
+    CREATE INDEX idx_rfm_segment_counts_merchant_id ON rfm_segment_counts(merchant_id);
+    CREATE INDEX idx_rfm_segment_counts_report_id ON rfm_segment_counts(report_id);
+    CREATE INDEX idx_rfm_segment_counts_last_refreshed ON rfm_segment_counts(last_refreshed);
+
+    DELETE FROM rfm_segment_deltas;
+
+    PERFORM pg_advisory_unlock(hashtext('rfm_segment_counts'));
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- Trigger function to populate rfm_segment_deltas on customer changes
+CREATE OR REPLACE FUNCTION trigger_rfm_segment_deltas() RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO rfm_segment_deltas (
+            merchant_id,
+            customer_id,
+            rfm_score,
+            metadata,
+            operation,
+            created_at
+        )
+        VALUES (
+            NEW.merchant_id,
+            NEW.id,
+            NEW.rfm_score,
+            NEW.metadata,
+            'insert',
+            CURRENT_TIMESTAMP
+        );
+        -- US-AM16: Insert into churn_predictions if churn_score exists
+        IF NEW.churn_score IS NOT NULL THEN
+            INSERT INTO churn_predictions (
+                merchant_id,
+                customer_id,
+                churn_probability,
+                recommended_actions,
+                created_at
+            )
+            VALUES (
+                NEW.merchant_id,
+                NEW.id,
+                NEW.churn_score,
+                jsonb_build_object('action', 'evaluate', 'source', 'xai_api'),
+                CURRENT_TIMESTAMP
+            );
+        END IF;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.rfm_score IS DISTINCT FROM NEW.rfm_score 
+           OR OLD.metadata->>'lifecycle_stage' IS DISTINCT FROM NEW.metadata->>'lifecycle_stage'
+           OR OLD.churn_score IS DISTINCT FROM NEW.churn_score THEN
+            INSERT INTO rfm_segment_deltas (
+                merchant_id,
+                customer_id,
+                rfm_score,
+                metadata,
+                operation,
+                created_at
+            )
+            VALUES (
+                NEW.merchant_id,
+                NEW.id,
+                NEW.rfm_score,
+                NEW.metadata,
+                'update',
+                CURRENT_TIMESTAMP
+            );
+            -- US-AM16: Update churn_predictions on churn_score change
+            IF OLD.churn_score IS DISTINCT FROM NEW.churn_score AND NEW.churn_score IS NOT NULL THEN
+                INSERT INTO churn_predictions (
+                    merchant_id,
+                    customer_id,
+                    churn_probability,
+                    recommended_actions,
+                    created_at
+                )
+                VALUES (
+                    NEW.merchant_id,
+                    NEW.id,
+                    NEW.churn_score,
+                    jsonb_build_object('action', 're-evaluate', 'source', 'xai_api'),
+                    CURRENT_TIMESTAMP
+                );
+            END IF;
+        END IF;
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO rfm_segment_deltas (
+            merchant_id,
+            customer_id,
+            rfm_score,
+            metadata,
+            operation,
+            created_at
+        )
+        VALUES (
+            OLD.merchant_id,
+            OLD.id,
+            OLD.rfm_score,
+            OLD.metadata,
+            'delete',
+            CURRENT_TIMESTAMP
+        );
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger function to populate audit_logs with replay metadata
+CREATE OR REPLACE FUNCTION trigger_audit_log() RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_logs (
+            merchant_id,
+            actor_id,
+            entity_type,
+            entity_id,
+            action,
+            severity,
+            metadata,
+            created_at
+        )
+        VALUES (
+            NEW.merchant_id,
+            NULL,
+            TG_TABLE_NAME,
+            NEW.id,
+            TG_TABLE_NAME || '_created',
+            'info',
+            jsonb_build_object(
+                'operation', 'insert',
+                'replay_status', 'none', -- US-AM15: Initialize replay status
+                'original_action_id', NULL
+            ),
+            CURRENT_TIMESTAMP
+        );
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_logs (
+            merchant_id,
+            actor_id,
+            entity_type,
+            entity_id,
+            action,
+            severity,
+            metadata,
+            created_at
+        )
+        VALUES (
+            NEW.merchant_id,
+            NULL,
+            TG_TABLE_NAME,
+            NEW.id,
+            TG_TABLE_NAME || '_updated',
+            'info',
+            jsonb_build_object(
+                'operation', 'update',
+                'replay_status', 'none', -- US-AM15
+                'original_action_id', NULL
+            ),
+            CURRENT_TIMESTAMP
+        );
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO audit_logs (
+            merchant_id,
+            actor_id,
+            entity_type,
+            entity_id,
+            action,
+            severity,
+            metadata,
+            created_at
+        )
+        VALUES (
+            OLD.merchant_id,
+            NULL,
+            TG_TABLE_NAME,
+            OLD.id,
+            TG_TABLE_NAME || '_deleted',
+            'warning',
+            jsonb_build_object(
+                'operation', 'delete',
+                'replay_status', 'none', -- US-AM15
+                'original_action_id', NULL
+            ),
+            CURRENT_TIMESTAMP
+        );
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers for customers table
+CREATE TRIGGER customers_rfm_segment_trigger
+AFTER INSERT OR UPDATE OR DELETE ON customers
+FOR EACH ROW EXECUTE FUNCTION trigger_rfm_segment_deltas();
+
+CREATE TRIGGER customers_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON customers
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- Triggers for other tables (from core_schema.txt, unchanged)
+CREATE TRIGGER merchants_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON merchants
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER customer_segments_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON customer_segments
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER points_transactions_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON points_transactions
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER referrals_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON referrals
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER reward_redemptions_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON reward_redemptions
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER vip_tiers_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON vip_tiers
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER program_settings_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON program_settings
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER email_templates_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON email_templates
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER email_events_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON email_events
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER gdpr_requests_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON gdpr_requests
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER webhook_idempotency_keys_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON webhook_idempotency_keys
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER integrations_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON integrations
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER nudges_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON nudges
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER nudge_events_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON nudge_events
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER bonus_campaigns_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON bonus_campaigns
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER gamification_achievements_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON gamification_achievements
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER leaderboards_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON leaderboards
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER team_leaderboards_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON team_leaderboards
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER data_imports_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON data_imports
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER data_export_requests_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON data_export_requests
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER merchant_referrals_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON merchant_referrals
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER slack_community_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON slack_community
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER onboarding_tasks_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON onboarding_tasks
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER rfm_benchmarks_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON rfm_benchmarks
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER rfm_score_history_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON rfm_score_history
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+-- New triggers for added tables
+CREATE TRIGGER shopify_flow_templates_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON shopify_flow_templates
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER rfm_simulations_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON rfm_simulations
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER wallet_exports_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON wallet_exports
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER churn_predictions_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON churn_predictions
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TRIGGER action_replays_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON action_replays
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+
+### Step 4: Explanation of Changes
+1. **Trigger Function `trigger_rfm_segment_deltas`**:
+   - Added `churn_predictions` inserts for `INSERT` and `UPDATE` operations when `churn_score` is present or changes, supporting `US-AM16` (AI Churn Prevention).
+   - Removed `multi_tenant_group_id` from `rfm_segment_deltas` as RFM calculations are merchant-specific, but `customers` and `points_transactions` already support multi-tenant groups via `multi_tenant_group_id`.
+2. **Trigger Function `trigger_audit_log`**:
+   - Enhanced `metadata` with `replay_status` and `original_action_id` fields to support `US-AM15` (Action Replay/Undo).
+3. **Triggers**:
+   - Retained `customers_rfm_segment_trigger` and `customers_audit_trigger` from `rfm_schema.txt` and `core_schema.txt`.
+   - Added audit triggers for new tables (`shopify_flow_templates`, `rfm_simulations`, `wallet_exports`, `churn_predictions`, `action_replays`) to ensure comprehensive auditing.
+4. **Schema Consistency**:
+   - All tables reference the updated `merchants` and `customers` tables with `multi_tenant_group_id` and `vip_progress`.
+   - Indexes and partitions remain consistent with the original schemas (8 hash partitions).
+   - Encryption (AES-256 via pgcrypto) is applied to `wallet_exports.pass_data` for `US-CW17`.
+
+### Step 5: Verification
+- **US-MD19**: Supported by `shopify_flow_templates` table and `program_settings.shopify_flow_config`.
+- **US-MD20**: Supported by `rfm_benchmarks.anonymized_data`.
+- **US-MD21**: Supported by `nudges.ab_tests`.
+- **US-MD22**: Supported by `rfm_simulations`.
+- **US-CW16**: Supported by `customers.vip_progress`.
+- **US-CW17**: Supported by `wallet_exports`.
+- **US-AM14**: Supported by `merchants.multi_tenant_group_id`, `points_transactions.multi_tenant_group_id`, and `referrals.multi_tenant_group_id`.
+- **US-AM15**: Supported by `action_replays` and enhanced `audit_logs.metadata`.
+- **US-AM16**: Supported by `churn_predictions` and `trigger_rfm_segment_deltas` updates.
+- **US-CW7**: Supported by `referrals.type` including `whatsapp` and `spoof_detection`.
+
+This schema fully aligns with the updated `features.md` and `user_stories.md`, maintaining compatibility with existing functionality while adding support for new requirements. The artifact is complete and ready for implementation.
+

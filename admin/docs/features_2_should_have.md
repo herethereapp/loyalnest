@@ -1,0 +1,432 @@
+## SHOULD HAVE FEATURES
+Enhance user experience, scalability, or efficiency for medium to Shopify Plus merchants (Phase 3, 5,000–50,000 customers).
+
+### 1. Points Program (Phase 3)
+- **Goal**: Expand earning and redemption options. Success metric: 90%+ adoption of new actions, 85%+ redemption rate, 15%+ multi-store sync adoption (Phase 5), 90%+ multi-currency adoption.
+- **Earning Actions**: Social follows (50 points), goal spend ($100 for 200 points), referrals (50 points), merchant referrals (Phase 5, e.g., 500 points for referring a merchant).
+- **Dynamic Point Multipliers**: Real-time multipliers (e.g., 2x for first purchase within 24 hours, RFM-based: 1.5x for Champions) via Rust/Wasm Shopify Functions, logged in `points_transactions`.
+- **Redemption Options**: Cashback, custom incentives (e.g., exclusive products) via GraphQL Admin API (40 req/s for Plus). Supports multi-store point sharing (Phase 5, US-CW6).
+- **Multi-Currency Support**: Supports multi-currency discounts (e.g., USD, EUR, CAD) via Shopify’s multi-currency API, applied at checkout using Shopify Checkout UI Extensions (Rust/Wasm). Stores currency in `points_transactions.currency`.
+- **Customization**: Fully customizable rewards page, no-code Sticky Bar (US-CW14), post-purchase widget (US-CW15), advanced branding with Polaris-compliant UI, i18next (`en`, `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`(RTL), `ko`, `uk`, `hu`, `sv`, `he`(RTL)), and Tailwind CSS.
+- **Scalability**: Supports 50,000+ customers via Redis Streams (`points:{customer_id}`, `multiplier:{customer_id}`, `currency:{customer_id}`), Bull queues, PostgreSQL partitioning, circuit breakers, and Chaos Mesh testing for Black Friday surges (10,000 orders/hour).
+- **Database Design**:
+  - **Table**: `program_settings`
+    - `merchant_id` (text, PK, FK → `merchants`, NOT NULL): Merchant.
+    - `dynamic_multipliers` (jsonb): e.g., `{"first_purchase_24h": 2.0, "rfm_champion": 1.5}`.
+    - `multi_store_config` (jsonb, Phase 5): e.g., `{"shared_stores": ["store1.myshopify.com", "store2.myshopify.com"]}`.
+    - `multi_currency_config` (jsonb): e.g., `{"supported_currencies": ["USD", "EUR", "CAD"]}`.
+  - **Table**: `points_transactions` (partitioned by `merchant_id`)
+    - `transaction_id` (text, PK, NOT NULL): Unique ID.
+    - `customer_id` (text, FK → `customers`, NOT NULL): Customer.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `type` (text, CHECK IN ('earn', 'redeem', 'expire', 'adjust', 'import', 'referral', 'campaign')): Action type.
+    - `points` (integer, CHECK >= 0): Points awarded.
+    - `currency` (text): e.g., `USD`, `EUR`, `CAD`.
+    - `source` (text): Source (e.g., "order", "rfm_reward").
+    - `order_id` (text): Shopify order ID.
+    - `expiry_date` (timestamp(3)): Expiry timestamp.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `multiplier_applied`, `multi_store_sync`, `multi_currency_applied`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"multiplier": 2.0, "action": "first_purchase", "currency": "USD"}`.
+  - **Indexes**: `idx_program_settings_merchant_id` (btree: `merchant_id`), `idx_points_transactions_customer_id` (btree: `customer_id`, `created_at`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **PUT** `/v1/api/points-program` (REST) | gRPC `/admin.v1/AdminService/UpdatePointsProgram`
+    - **Input**: `{ merchant_id: string, config: { purchase: number, signup: number, social_follow: number, referral: number }, dynamic_multipliers: object, branding: { points_currency_singular: string }, multi_store_config: object, multi_currency_config: { supported_currencies: array }, locale: string }`
+    - **Output**: `{ status: string, error: { code: string, message: string } | null }`
+    - **Flow**: Update `program_settings`, cache in Redis Streams (`program:{merchant_id}`, `multiplier:{merchant_id}`, `currency:{merchant_id}`), log in `audit_logs`, track via PostHog (`points_config_updated`, 80%+ usage, `multi_currency_configured`, 90%+ adoption).
+  - **POST** `/v1/api/points/calculate` (REST) | gRPC `/points.v1/PointsService/CalculateDynamicPoints`
+    - **Input**: `{ customer_id: string, action_type: string, order_id: string, currency: string, locale: string }`
+    - **Output**: `{ status: string, points: number, multiplier: number, currency: string, error: { code: string, message: string } | null }`
+    - **Flow**: Calculate multiplier via Rust/Wasm, apply RFM multiplier (`program_settings.rfm_thresholds`), validate currency via Shopify’s multi-currency API, cache in Redis Streams (`multiplier:{customer_id}`, `currency:{customer_id}`), log in `audit_logs`, track via PostHog (`multiplier_applied`, 90%+ adoption, `multi_currency_applied`, 90%+ adoption).
+  - **POST** `/v1/api/points/sync` (Phase 5) | gRPC `/points.v1/PointsService/SyncPoints`
+    - **Input**: `{ customer_id: string, store_ids: array, locale: string }`
+    - **Output**: `{ status: string, points_balance: number, error: { code: string, message: string } | null }`
+    - **Flow**: Sync `points_balance` across stores, update `points_transactions`, cache in Redis Streams (`points:{customer_id}`), log in `audit_logs`, track via PostHog (`multi_store_sync`, 15%+ adoption).
+- **Service**: Points Service (gRPC: `/points.v1/*`, Dockerized).
+
+### 2. Referral Program (Phase 3)
+- **Goal**: Enhance referral engagement and integrity. Success metric: 10%+ interaction rate, 7%+ conversion rate for customer referrals, 5%+ for merchant referrals (Phase 5), 95%+ spoof detection rate.
+- **Sharing Options**: WhatsApp integration via Twilio, email (Klaviyo), SMS (Postscript), social media (Facebook, Instagram). Supports merchant referral program (Phase 5).
+- **Multi-Tier Referrals**: Rewards increase with referral count (e.g., 50 points for 1st, 100 for 5th), displayed in Customer Widget (US-CW7) with Polaris `ProgressBar`.
+- **Popups/Nudges**: Exit-intent, time-optimized popups for referrals/email capture, RFM-based nudges (e.g., “Invite a friend!” for At-Risk), A/B tested via `program_settings.ab_tests`.
+- **Referral Spoof Detection**: Detects abuse (e.g., same IP, email patterns) using heuristic-based scoring and lightweight ML (via xAI API: https://x.ai/api). Alerts merchants via AWS SNS (Slack/email) for high-risk referrals.
+- **Scalability**: Handles 5,000 concurrent shares with Redis Streams (`referral:{referral_code}`, `anomaly:{referral_id}`), Bull queues, circuit breakers, and Chaos Mesh testing.
+- **Database Design**:
+  - **Table**: `referral_tiers` (partitioned by `merchant_id`)
+    - `tier_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `referral_count` (integer, CHECK >= 1): Threshold.
+    - `reward_points` (integer, CHECK >= 0): Points awarded.
+  - **Table**: `referral_anomalies` (partitioned by `merchant_id`)
+    - `anomaly_id` (text, PK, NOT NULL): Unique ID.
+    - `referral_id` (text, FK → `referrals`, NOT NULL): Referral.
+    - `score` (numeric(10,2), CHECK BETWEEN 0 AND 1): Anomaly score.
+    - `reason` (text): e.g., "same_ip", "email_pattern".
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `merchant_referrals` (Phase 5, partitioned by `merchant_id`)
+    - `merchant_referral_id` (text, PK, NOT NULL): Unique ID.
+    - `advocate_merchant_id` (text, FK → `merchants`, NOT NULL): Referring merchant.
+    - `referred_merchant_id` (text, FK → `merchants`, NOT NULL): Referred merchant.
+    - `reward_id` (text, FK → `rewards`): Reward.
+    - `status` (text, CHECK IN ('pending', 'completed', 'expired')): Status.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `referral_tier_achieved`, `merchant_referral_created`, `spoof_detected`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"tier_id": "tier1", "referral_count": 5, "anomaly_score": 0.9}`.
+  - **Indexes**: `idx_referral_tiers_merchant_id` (btree: `merchant_id`), `idx_referral_anomalies_referral_id` (btree: `referral_id`), `idx_merchant_referrals_advocate_merchant_id` (btree: `advocate_merchant_id`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **PUT** `/v1/api/referrals/config` (REST) | gRPC `/referrals.v1/ReferralService/UpdateReferralConfig`
+    - **Input**: `{ merchant_id: string, config: { reward: string, whatsapp_enabled: boolean, tiers: array, merchant_referral_enabled: boolean }, locale: string }`
+    - **Output**: `{ status: string, error: { code: string, message: string } | null }`
+    - **Flow**: Update `program_settings.config`, `referral_tiers`, `merchant_referrals` (Phase 5), notify via Twilio/Klaviyo/Postscript, cache in Redis Streams (`referral_config:{merchant_id}`, `referral_tier:{merchant_id}`), log in `audit_logs`, track via PostHog (`referral_config_updated`, 80%+ usage).
+  - **POST** `/v1/api/referrals/analyze` (REST) | gRPC `/referrals.v1/ReferralService/AnalyzeReferral`
+    - **Input**: `{ referral_id: string, ip_address: string, email: string, locale: string }`
+    - **Output**: `{ status: string, anomaly_score: number, reason: string, error: { code: string, message: string } | null }`
+    - **Flow**: Calculate anomaly score via heuristics/ML (xAI API), insert into `referral_anomalies`, notify via AWS SNS if score > 0.8, cache in Redis Streams (`anomaly:{referral_id}`), log in `audit_logs`, track via PostHog (`spoof_detected`, 95%+ detection rate).
+- **Service**: Referrals Service (gRPC: `/referrals.v1/*`, Dockerized).
+
+### 3. VIP Tiers (Phase 3)
+- **Goal**: Reward loyal customers with tiered benefits and ensure accurate configuration. Success metric: 15%+ tier progression rate, 90%+ adoption of preview mode.
+- **Features**: Tiered rewards (Bronze, Silver, Gold) based on points, spend, or RFM scores, configured via no-code dashboard (US-MD2). Displays progress in Customer Widget (US-CW7) with Polaris `ProgressBar`. Supports Shopify Flow triggers (e.g., “Tier Upgraded → Notify Customer”).
+- **VIP Preview Mode**: Simulates tier assignments for sample customers before launch, visualized with Chart.js (bar type for tier distribution).
+- **Scalability**: Handles 50,000+ customers with Redis Streams (`tiers:{customer_id}`, `preview:{merchant_id}`), Bull queues, PostgreSQL partitioning, and circuit breakers.
+- **Database Design**:
+  - **Table**: `vip_tiers` (partitioned by `merchant_id`)
+    - `tier_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `name` (jsonb, CHECK ?| ARRAY['en', `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`]): e.g., `{"en": "Gold", "ar": "..."}`.
+    - `rules` (jsonb): e.g., `{"points": ">=1000", "rfm_score": ">=4"}`.
+    - `benefits` (jsonb): e.g., `{"discount": "10%", "free_shipping": true}`.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `tier_assigned`, `preview_simulated`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"tier_id": "gold", "customer_count": 50}`.
+  - **Indexes**: `idx_vip_tiers_merchant_id` (btree: `merchant_id`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **GET** `/v1/api/vip/preview` (REST) | gRPC `/points.v1/PointsService/PreviewVIPTier`
+    - **Input**: `{ merchant_id: string, sample_customers: array, locale: string }`
+    - **Output**: `{ status: string, preview: [{ customer_id: string, tier_id: string, tier_name: string }], error: { code: string, message: string } | null }`
+    - **Flow**: Apply `vip_tiers.rules` to sample `customers` data (`rfm_score`, `points_balance`), generate Chart.js data (bar type), cache in Redis Streams (`preview:{merchant_id}`), log in `audit_logs`, track via PostHog (`preview_simulated`, 90%+ adoption).
+- **Service**: Points Service (gRPC: `/points.v1/*`, Dockerized).
+
+### 4. On-Site Content (Phase 3)
+- **Goal**: Improve engagement with advanced widgets. Success metric: 85%+ adoption, 10%+ click-through rate, Lighthouse CI score 90+.
+- **Widgets**: Discount banners, point calculators, checkout extensions via Storefront API, sticky bar (US-CW14), post-purchase widget (US-CW15), Theme App Extensions (Phase 5).
+- **Dynamic Widget Placement**: Configure positions (e.g., top-right, bottom-left) via no-code dashboard (US-MD2) with Polaris `Select` and live preview.
+- **Launchers**: Apple/Google Wallet integration for loyalty cards, localized (`en`, `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`(RTL), `ko`, `uk`, `hu`, `sv`, `he`(RTL)).
+- **Scalability**: Renders <1s for 50,000+ customers via Redis Streams (`content:{merchant_id}:{locale}`), supports 10,000 orders/hour with circuit breakers and Chaos Mesh testing.
+- **Database Design**:
+  - **Table**: `program_settings`
+    - `merchant_id` (text, PK, FK → `merchants`, NOT NULL): Merchant.
+    - `branding` (jsonb, CHECK ?| ARRAY['en', `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`]): e.g., `{"discount_banner": {...}, "point_calculator": {...}, "sticky_bar": {...}, "post_purchase": {...}}`.
+    - `widget_position` (jsonb): e.g., `{"launcher_button": {"position": "top-right"}, "sticky_bar": {"position": "bottom"}}`.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `widget_position_updated`, `sticky_bar_clicked`, `post_purchase_viewed`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"position": "top-right", "widget_type": "sticky_bar"}`.
+  - **Indexes**: `idx_program_settings_merchant_id` (btree: `merchant_id`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **PUT** `/v1/api/content` (REST) | gRPC `/frontend.v1/FrontendService/UpdateContent`
+    - **Input**: `{ merchant_id: string, branding: { discount_banner: object, point_calculator: object, sticky_bar: object, post_purchase: object }, widget_position: object, locale: string }`
+    - **Output**: `{ status: string, preview: object, error: { code: string, message: string } | null }`
+    - **Flow**: Validate inputs, update `program_settings.branding`, `program_settings.widget_position`, cache in Redis Streams (`content:{merchant_id}:{locale}`), log in `audit_logs`, track via PostHog (`content_updated`, 10%+ click-through).
+- **Service**: Frontend Service (gRPC: `/frontend.v1/*`, Dockerized).
+
+### 5. Bonus Campaigns (Phase 3)
+- **Goal**: Drive urgency with time-sensitive campaigns and data-driven suggestions. Success metric: 20%+ engagement rate, 15%+ redemption rate for Plus merchants, 80%+ campaign suggestion adoption.
+- **Types**: Time-sensitive promotions, goal spend ($100 for 200 points), points multipliers (2x), RFM-based campaigns (e.g., Champions only).
+- **Geo-Targeted Campaigns**: Region-specific promotions (e.g., 2x points in EU) based on `customers.location`, logged in `bonus_campaigns.conditions`.
+- **Predictive Campaign Suggestions**: Suggest campaigns based on RFM drops (e.g., “Lost 12 Champions → Send 2x points offer”) or churn probability (`customers.churn_score`), displayed in Merchant Dashboard with Polaris `Card`.
+- **Conditions**: Scheduled/automated via no-code dashboard (US-MD2), RFM-based eligibility (`program_settings.rfm_thresholds`), supports Shopify Flow templates (Phase 5, e.g., “Campaign Started → Notify Customers”).
+- **Scalability**: Handles 50,000+ customers with Redis Streams (`campaign:{campaign_id}:{region}`, `suggestion:{merchant_id}`), Bull queues, and circuit breakers.
+- **Database Design**:
+  - **Table**: `bonus_campaigns` (partitioned by `merchant_id`)
+    - `campaign_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `type` (text, CHECK IN ('discount', 'double_points', 'goal_spend')): Type.
+    - `multiplier` (numeric(10,2), CHECK >= 1): Multiplier.
+    - `start_date`, `end_date` (timestamp(3)): Dates.
+    - `conditions` (jsonb): e.g., `{"rfm_segment": "Champions", "region": "EU"}`.
+  - **Table**: `campaign_suggestions` (partitioned by `merchant_id`)
+    - `suggestion_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `type` (text, CHECK IN ('discount', 'double_points', 'goal_spend')): Type.
+    - `conditions` (jsonb): e.g., `{"rfm_segment": "At-Risk", "churn_score": ">0.7"}`.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `campaign_created`, `campaign_discount_applied`, `campaign_suggested`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"region": "EU", "campaign_id": "CAMP123", "suggestion_id": "SUG123"}`.
+  - **Indexes**: `idx_bonus_campaigns_merchant_id_type` (btree: `merchant_id`, `type`), `idx_campaign_suggestions_merchant_id` (btree: `merchant_id`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **POST** `/v1/api/campaigns` (REST) | gRPC `/points.v1/PointsService/CreateCampaign`
+    - **Input**: `{ merchant_id: string, type: string, multiplier: number, dates: { start: string, end: string }, conditions: { rfm_segment: string, region: string }, locale: string }`
+    - **Output**: `{ status: string, campaign_id: string, error: { code: string, message: string } | null }`
+    - **Flow**: Insert into `bonus_campaigns`, notify via Klaviyo/Postscript (3 retries, `en`, `es`, `fr`, `ar`, `he` with RTL), cache in Redis Streams (`campaign:{campaign_id}:{region}`), log in `audit_logs`, track via PostHog (`campaign_created`, 20%+ engagement).
+  - **GET** `/v1/api/campaigns/suggest` (REST) | gRPC `/points.v1/PointsService/SuggestCampaign`
+    - **Input**: `{ merchant_id: string, locale: string }`
+    - **Output**: `{ status: string, suggestions: [{ suggestion_id: string, type: string, conditions: object }], error: { code: string, message: string } | null }`
+    - **Flow**: Query `rfm_segment_counts`, `customers.churn_score`, generate suggestions via Rust/ML (xAI API), insert into `campaign_suggestions`, cache in Redis Streams (`suggestion:{merchant_id}`), log in `audit_logs`, track via PostHog (`campaign_suggested`, 80%+ adoption).
+- **Service**: Points Service (gRPC: `/points.v1/*`, Dockerized).
+
+### 6. Analytics (Phase 3)
+- **Goal**: Enhance analytics for campaign optimization and ROI tracking. Success metric: 80%+ dashboard interaction rate, <1s latency for advanced analytics, 80%+ ROI dashboard view rate.
+- **Reports**: ROI dashboard (revenue influenced, referral contribution %, VIP vs. non-VIP purchase behavior), comparisons with industry benchmarks (`rfm_benchmarks`), advanced retention analytics, RFM segment distribution (Chart.js, bar type).
+- **Predictive Churn Models**: Use lightweight ML (logistic regression in Rust, integrated via xAI API: https://x.ai/api) to identify at-risk customers (`customers.churn_score`) and suggest nudges (e.g., “Re-engage At-Risk”).
+- **Insights**: Real-time RFM data (time-weighted recency, lifecycle stages: new lead, repeat buyer, churned), behavioral segments (e.g., churn risk, VIP), A/B testing for nudges.
+- **Loyalty ROI Dashboard**: Dedicated dashboard showing revenue influenced by loyalty program, referral contribution %, and VIP vs. non-VIP purchase behavior, visualized with Chart.js (bar and line types).
+- **Scalability**: Handles 50,000+ customers with Redis Streams (`analytics:{merchant_id}`, `churn:{customer_id}`, `roi:{merchant_id}`), PostgreSQL partitioning, and circuit breakers.
+- **Database Design**:
+  - **Table**: `customers`
+    - `churn_score` (numeric(10,2), CHECK BETWEEN 0 AND 1): Churn probability.
+    - `lifecycle_stage` (text, CHECK IN ('new_lead', 'repeat_buyer', 'churned', 'vip')): Lifecycle stage.
+  - **Table**: `rfm_score_history` (partitioned by `merchant_id`)
+    - `history_id` (text, PK, NOT NULL): Unique ID.
+    - `customer_id` (text, FK → `customers`, NOT NULL): Customer.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `rfm_score` (jsonb): e.g., `{"recency": 5, "frequency": 3, "monetary": 4, "score": 4.2}`.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `rfm_benchmarks`
+    - `benchmark_id` (text, PK, NOT NULL): Unique ID.
+    - `industry` (text, NOT NULL): e.g., "Pet Store", "Electronics".
+    - `segment_name` (text, NOT NULL): e.g., "Champions".
+    - `thresholds` (jsonb): e.g., `{"recency": "<=30", "frequency": ">=5"}`.
+  - **Table**: `roi_metrics` (partitioned by `merchant_id`)
+    - `metric_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `revenue_influenced` (numeric(10,2)): Revenue from loyalty.
+    - `referral_contribution` (numeric(10,2)): Referral-driven revenue %.
+    - `vip_purchase_share` (numeric(10,2)): VIP vs. non-VIP purchase %.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `churn_predicted`, `rfm_updated`, `roi_viewed`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"churn_score": 0.75, "segment_name": "At-Risk", "revenue_influenced": 5000}`.
+  - **Indexes**: `idx_customers_churn_score` (btree: `churn_score`), `idx_rfm_score_history_customer_id` (btree: `customer_id`, `created_at`), `idx_rfm_benchmarks_industry` (btree: `industry`), `idx_roi_metrics_merchant_id` (btree: `merchant_id`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **GET** `/v1/api/analytics/advanced` (REST) | gRPC `/analytics.v1/AnalyticsService/GetAdvancedAnalytics`
+    - **Input**: `{ merchant_id: string, metrics: array, locale: string }`
+    - **Output**: `{ status: string, metrics: { roi: { revenue_influenced: number, referral_contribution: number, vip_purchase_share: number }, retention_rate: number, churn_risk: array, segment_counts: object }, segments: array, error: { code: string, message: string } | null }`
+    - **Flow**: Query `customer_segments`, `rfm_segment_counts`, `rfm_benchmarks`, `customers.churn_score`, `roi_metrics`, generate Chart.js data (bar and line types), cache in Redis Streams (`analytics:{merchant_id}`, `churn:{customer_id}`, `roi:{merchant_id}`), log in `audit_logs`, track via PostHog (`analytics_viewed`, `roi_viewed`, 80%+ view rate).
+  - **POST** `/v1/api/analytics/churn` (REST) | gRPC `/analytics.v1/AnalyticsService/PredictChurn`
+    - **Input**: `{ merchant_id: string, customer_ids: array, locale: string }`
+    - **Output**: `{ status: string, predictions: [{ customer_id: string, churn_score: number, lifecycle_stage: string }], error: { code: string, message: string } | null }`
+    - **Flow**: Calculate churn via Rust (xAI API: https://x.ai/api), update `customers.churn_score`, `customers.lifecycle_stage`, cache in Redis Streams (`churn:{customer_id}`), log in `audit_logs`, track via PostHog (`churn_predicted`, 80%+ accuracy).
+- **Service**: Analytics Service (gRPC: `/analytics.v1/*`, Dockerized).
+
+### 7. Integrations (Phase 3)
+- **Goal**: Broaden compatibility with advanced tools. Success metric: 95%+ integration success rate, 99%+ uptime, 90%+ adoption for Shopify Flow templates, 90%+ Klaviyo VIP tier sync adoption.
+- **Email/SMS**: Klaviyo, Mailchimp, Yotpo Email & SMS, Postscript for personalized campaigns (3 retries, exponential backoff, queue monitoring via `QueuesPage.tsx` with Chart.js). Supports RFM-based personalization (e.g., “Champions: 2x points”), Klaviyo VIP tier sync (`loyalnest_vip_tier` profile property), and multilingual notifications (`en`, `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`(RTL), `ko`, `uk`, `hu`, `sv`, `he`(RTL)).
+- **Others**: Shopify Plus (multi-store sync, 40 req/s), ReCharge (subscriptions, points for recurring orders), Gorgias (support tickets, priority for VIP tiers), Shopify Flow (automation templates, e.g., “Points Earned → Notify Customer”, “Order Cancelled → Adjust Points”), Zapier for custom workflows (e.g., sync points to CRM).
+- **Integration Health Checks**: Monitor status (e.g., “Shopify: OK”, “Klaviyo: Error”) in Admin Module (US-AM8) with real-time updates via WebSocket, visualized with Chart.js (line type for uptime trends). Alerts via AWS SNS (Slack/email) for failures.
+- **Scalability**: Handles 50,000+ customers with Redis Streams (`integration:{merchant_id}`, `klaviyo_vip:{merchant_id}`), PostgreSQL partitioning by `merchant_id`, circuit breakers, and Chaos Mesh testing for Black Friday surges (10,000 orders/hour).
+- **Database Design**:
+  - **Table**: `integrations` (partitioned by `merchant_id`)
+    - `integration_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `platform` (text, CHECK IN ('shopify', 'klaviyo', 'mailchimp', 'yotpo', 'postscript', 'recharge', 'gorgias', 'shopify_flow', 'zapier')): Platform.
+    - `settings` (jsonb): e.g., `{"zapier_webhook_url": "https://hooks.zapier.com/...", "klaviyo_vip_sync": true, "shopify_flow_template": "points_earned"}`.
+    - `status` (text, CHECK IN ('ok', 'error')): Health status.
+    - `last_checked_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Last health check.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `integration_configured`, `integration_health_checked`, `klaviyo_vip_synced`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"platform": "klaviyo", "status": "ok", "template": "points_earned"}`.
+  - **Indexes**: `idx_integrations_merchant_id_platform` (btree: `merchant_id`, `platform`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **POST** `/v1/api/integrations` (REST) | gRPC `/admin.v1/AdminService/ConfigureIntegration`
+    - **Input**: `{ merchant_id: string, type: string, settings: { klaviyo_vip_sync: boolean, zapier_webhook_url: string }, locale: string }`
+    - **Output**: `{ status: string, integration_id: string, error: { code: string, message: string } | null }`
+    - **Flow**: Validate settings, insert into `integrations`, test connection (e.g., Klaviyo VIP sync, Zapier webhook ping), cache in Redis Streams (`integration:{merchant_id}`, `klaviyo_vip:{merchant_id}`), log in `audit_logs`, track via PostHog (`integration_configured`, `klaviyo_vip_synced`, 90%+ adoption).
+  - **POST** `/v1/api/integrations/zapier` (REST) | gRPC `/admin.v1/AdminService/ConfigureWebhook`
+    - **Input**: `{ merchant_id: string, webhook_url: string, events: array, locale: string }`
+    - **Output**: `{ status: string, webhook_id: string, error: { code: string, message: string } | null }`
+    - **Flow**: Validate webhook URL, update `integrations`, cache in Redis Streams (`zapier:{merchant_id}`), log in `audit_logs`, track via PostHog (`zapier_configured`, 90%+ adoption).
+  - **GET** `/v1/api/integrations/health` (REST) | gRPC `/admin.v1/AdminService/CheckIntegrationHealth`
+    - **Input**: `{ merchant_id: string, platform: string }`
+    - **Output**: `{ status: string, health: { platform: string, status: string, last_checked: string }, error: { code: string, message: string } | null }`
+    - **Flow**: Query `integrations`, perform health check, stream via WebSocket, cache in Redis Streams (`health:{merchant_id}:{platform}`), log in `audit_logs`, track via PostHog (`integration_health_checked`, 99%+ uptime).
+- **Service**: Admin Service (gRPC: `/admin.v1/*`, Dockerized).
+
+### 8. Testing and Monitoring (Phase 3)
+- **Goal**: Ensure reliability and performance with developer-friendly tools. Success metric: 99%+ uptime, <1s alert latency, 80%+ test coverage, 95%+ Redis cache hit rate, 90%+ sandbox adoption.
+- **Automated Testing**: Jest (unit/integration tests for APIs, e.g., `PointsService`, `ReferralService`), Cypress (E2E for Customer Widget, Merchant Dashboard, Admin Module), cargo test (Rust/Wasm Shopify Functions), k6 (load testing for 10,000 orders/hour).
+- **Chaos Testing**: Simulate failures (e.g., Redis downtime, API latency, pod crashes) using Chaos Mesh in Kubernetes to ensure resilience (99%+ uptime).
+- **Staging Sandbox**: Developer mode with dummy customer data for testing configurations (e.g., points, VIP tiers, campaigns), integrated with `dev.sh` script and Kubernetes namespaces.
+- **Monitoring Metrics**: API latency (<1s), Redis cache hits (>95%), Bull queue delays (<5s), error rates (<1%) via Prometheus/Grafana. Error tracking with Sentry, centralized logging with Loki. Rate limit monitoring with AWS SNS alerts.
+- **Developer Tools**: `dev.sh` script for mock data, RFM simulation, merchant referral testing, and sandbox mode, enhanced with AI tools (Grok for edge cases, Copilot for code, Cursor for tests).
+- **Database Design**:
+  - **Table**: `sandbox_configs` (partitioned by `merchant_id`)
+    - `sandbox_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `dummy_data` (jsonb): e.g., `{"customers": [{"customer_id": "C123", "points_balance": 500}]}`.
+    - `status` (text, CHECK IN ('active', 'expired')): Status.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `system_alert`, `chaos_test_failed`, `rate_limit_alerted`, `sandbox_enabled`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"error_rate": 0.01, "chaos_type": "redis_downtime", "sandbox_id": "SAND123"}`.
+  - **Indexes**: `idx_sandbox_configs_merchant_id` (btree: `merchant_id`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **POST** `/v1/api/admin/sandbox` (REST) | gRPC `/admin.v1/AdminService/EnableSandbox`
+    - **Input**: `{ merchant_id: string, dummy_data: object, locale: string }`
+    - **Output**: `{ status: string, sandbox_id: string, error: { code: string, message: string } | null }`
+    - **Flow**: Create temporary `merchants` record with dummy `customers`, `points_transactions`, insert into `sandbox_configs`, isolate via Kubernetes namespaces, cache in Redis Streams (`sandbox:{merchant_id}`), log in `audit_logs`, track via PostHog (`sandbox_enabled`, 90%+ adoption).
+  - **GET** `/v1/api/monitoring` (REST) | gRPC `/admin.v1/AdminService/GetMonitoringMetrics`
+    - **Input**: `{ service: string, time_range: string }`
+    - **Output**: `{ status: string, metrics: { latency: number, error_rate: number, cache_hits: number, queue_delays: number, chaos_results: object }, error: { code: string, message: string } | null }`
+    - **Flow**: Query Prometheus, cache in Redis Streams (`metrics:{service}`), enforce RBAC (`admin:full`, `admin:analytics`), log in `audit_logs`, track via PostHog (`monitoring_viewed`, 80%+ view rate).
+- **Service**: Admin Service (gRPC: `/admin.v1/*`, Dockerized).
+
+### 9. Multilingual Support (Phase 3)
+- **Goal**: Support multi-region stores. Success metric: 80%+ adoption of localized widgets, 90%+ translation accuracy, Lighthouse CI score 90+.
+- **Implementation**: Uses i18next for widget localization (`en`, `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`(RTL), `ko`, `uk`, `hu`, `sv`, `he`(RTL)), JSONB fields in `email_templates.body`, `nudges.title`, `program_settings.branding`. Persists user choice in `localStorage`, respects `Accept-Language` headers, supports RTL for `ar`, `he` with WCAG 2.1 compliance (ARIA labels, keyboard navigation).
+- **Translation Management**: No-code dashboard for merchants to customize translations (US-MD2), validated for accuracy via automated checks (e.g., missing keys, RTL alignment).
+- **Scalability**: Handles 50,000+ customers with Redis Streams (`config:{merchant_id}:{locale}`), <1s widget rendering.
+- **Database Design**:
+  - **Table**: `merchants`
+    - `language` (jsonb, CHECK ?| ARRAY['en', `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`]): e.g., `{"default": "en", "supported": ["en", `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`], "rtl": ["ar", "he"]}`.
+  - **Table**: `email_templates`
+    - `template_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `type` (text, CHECK IN ('points_earned', 'referral_completed', 'tier_upgraded')): Template type.
+    - `body` (jsonb, CHECK ?| ARRAY['en', `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`]): e.g., `{"en": "Earned {points} points!", "ar": "..."}`.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `language_updated`, `translation_validated`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"locale": "ar", "rtl": true}`.
+  - **Indexes**: `idx_merchants_language` (gin: `language`), `idx_email_templates_merchant_id_type` (btree: `merchant_id`, `type`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **GET** `/v1/api/widget/config` (REST) | gRPC `/frontend.v1/FrontendService/GetWidgetConfig`
+    - **Input**: `{ merchant_id: string, locale: string }`
+    - **Output**: `{ status: string, language: string, translations: { points_label: string, rewards: object }, rtl: boolean, error: { code: string, message: string } | null }`
+    - **Flow**: Query `merchants.language`, `email_templates`, cache in Redis Streams (`config:{merchant_id}:{locale}`), log in `audit_logs`, track via PostHog (`language_selected`, 80%+ adoption).
+  - **PUT** `/v1/api/translations` (REST) | gRPC `/frontend.v1/FrontendService/UpdateTranslations`
+    - **Input**: `{ merchant_id: string, translations: object, locale: string }`
+    - **Output**: `{ status: string, error: { code: string, message: string } | null }`
+    - **Flow**: Validate translations, update `program_settings.branding`, `email_templates`, cache in Redis Streams (`translations:{merchant_id}:{locale}`), log in `audit_logs`, track via PostHog (`translation_updated`, 90%+ accuracy).
+- **Service**: Frontend Service (gRPC: `/frontend.v1/*`, Dockerized).
+
+### 10. RFM Nudges (Phase 3)
+- **Goal**: Encourage engagement with RFM-based nudges. Success metric: 10%+ interaction rate, 15%+ conversion rate for nudges.
+- **Features**: Displays smart nudges (e.g., “Stay Active!” for At-Risk, “Welcome Back!” for Inactive) in Customer Widget via Storefront API (US-CW10), logs interactions in `nudge_events`, supports `en`, `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`(RTL), `ko`, `uk`, `hu`, `sv`, `he`(RTL) via i18next. A/B tests nudge variants (e.g., text, timing) via `program_settings.ab_tests`.
+- **Personalized Nudge Content**: Uses customer data (e.g., “Hi {name}, earn 50 points!”) with RFM segments (Champions, At-Risk, New, Inactive) and lifecycle stages (new lead, repeat buyer, churned).
+- **Scalability**: Handles 50,000+ customers with Redis Streams (`nudge:{customer_id}`), PostgreSQL partitioning, and circuit breakers.
+- **Database Design**:
+  - **Table**: `nudges` (partitioned by `merchant_id`)
+    - `nudge_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `type` (text, CHECK IN ('at-risk', 'loyal', 'new', 'inactive', 'churned')): Nudge type.
+    - `title` (jsonb, CHECK ?| ARRAY['en', `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`]): e.g., `{"en": "Stay Active", "ar": "..."}`.
+    - `personalized_content` (jsonb, CHECK ?| ARRAY['en', `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`]): e.g., `{"en": "Hi {name}, earn 50 points!"}`.
+    - `conditions` (jsonb): e.g., `{"rfm_segment": "At-Risk", "lifecycle_stage": "churned"}`.
+  - **Table**: `nudge_events` (partitioned by `merchant_id`)
+    - `event_id` (text, PK, NOT NULL): Interaction ID.
+    - `customer_id` (text, FK → `customers`, NOT NULL): Customer.
+    - `nudge_id` (text, FK → `nudges`, NOT NULL): Nudge.
+    - `action` (text, CHECK IN ('view', 'click', 'dismiss')): Action.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `nudge_personalized`, `nudge_ab_tested`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"nudge_id": "nudge1", "customer_name": "John", "variant": "A"}`.
+  - **Indexes**: `idx_nudges_merchant_id_type` (btree: `merchant_id`, `type`), `idx_nudge_events_customer_id` (btree: `customer_id`, `created_at`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **GET** `/v1/api/nudges` (REST) | gRPC `/analytics.v1/AnalyticsService/GetNudges`
+    - **Input**: `{ customer_id: string, locale: string }`
+    - **Output**: `{ status: string, nudges: [{ nudge_id: string, title: string, personalized_content: string, variant: string }], error: { code: string, message: string } | null }`
+    - **Flow**: Query `nudges` based on `customers.rfm_score`, `customers.lifecycle_stage`, render personalized content, cache in Redis Streams (`nudge:{customer_id}`), log in `audit_logs`, track via PostHog (`rfm_nudge_viewed`, 10%+ interaction rate).
+  - **POST** `/v1/api/nudges/ab-test` (REST) | gRPC `/analytics.v1/AnalyticsService/StartNudgeABTest`
+    - **Input**: `{ merchant_id: string, nudge_id: string, variants: array, locale: string }`
+    - **Output**: `{ status: string, test_id: string, error: { code: string, message: string } | null }`
+    - **Flow**: Update `program_settings.ab_tests`, cache in Redis Streams (`ab_test:{merchant_id}:{nudge_id}`), log in `audit_logs`, track via PostHog (`nudge_ab_tested`, 15%+ conversion rate).
+- **Service**: Analytics Service (gRPC: `/analytics.v1/*`, Dockerized).
+
+### 11. Gamification (Phase 3)
+- **Goal**: Motivate customers with badges and leaderboards. Success metric: 15%+ engagement rate, 80%+ leaderboard view rate.
+- **Features**: Awards badges for actions (purchases, referrals, social follows, merchant referrals in Phase 5) via no-code dashboard (US-MD2), displays ranks in Redis sorted sets (`leaderboard:{merchant_id}:{cycle}`), visualized in Customer Widget with Chart.js (bar type). Notifies via Klaviyo/Postscript (3 retries, `en`, `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`(RTL), `ko`, `uk`, `hu`, `sv`, `he`(RTL)).
+- **Seasonal Leaderboards**: Monthly reset cycles (e.g., `2025-07`) to encourage recurring engagement, displayed in Customer Widget (US-CW11).
+- **Scalability**: Handles 50,000+ customers with Redis Streams (`badge:{customer_id}`, `leaderboard:{merchant_id}:{cycle}`), PostgreSQL partitioning, and circuit breakers.
+- **Database Design**:
+  - **Table**: `gamification_achievements` (partitioned by `merchant_id`)
+    - `achievement_id` (text, PK, NOT NULL): Unique ID.
+    - `customer_id` (text, FK → `customers`, NOT NULL): Customer.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `badge` (jsonb, CHECK ?| ARRAY['en', `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`, `ko`, `uk`, `hu`, `sv`, `he`]): e.g., `{"en": "Loyal Customer", "ar": "..."}`.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `leaderboards` (partitioned by `merchant_id`)
+    - `leaderboard_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `customer_id` (text, FK → `customers`, NOT NULL): Customer.
+    - `score` (integer, CHECK >= 0): Points-based score.
+    - `cycle` (text, NOT NULL): e.g., `2025-07`.
+    - `updated_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `badge_earned`, `leaderboard_reset`, `leaderboard_viewed`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"cycle": "2025-07", "badge": "Loyal Customer"}`.
+  - **Indexes**: `idx_gamification_achievements_customer_id` (btree: `customer_id`, `created_at`), `idx_leaderboards_merchant_id_cycle` (btree: `merchant_id`, `cycle`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **POST** `/v1/api/gamification/action` (REST) | gRPC `/analytics.v1/AnalyticsService/AwardBadge`
+    - **Input**: `{ customer_id: string, action_type: string, locale: string }`
+    - **Output**: `{ status: string, achievement_id: string, badge: string, error: { code: string, message: string } | null }`
+    - **Flow**: Insert into `gamification_achievements`, notify via Klaviyo/Postscript, cache in Redis Streams (`badge:{customer_id}`), log in `audit_logs`, track via PostHog (`badge_earned`, 15%+ engagement).
+  - **POST** `/v1/api/leaderboards/reset` (REST) | gRPC `/points.v1/PointsService/ResetLeaderboard`
+    - **Input**: `{ merchant_id: string, cycle: string, locale: string }`
+    - **Output**: `{ status: string, leaderboard_id: string, error: { code: string, message: string } | null }`
+    - **Flow**: Reset Redis sorted set (`leaderboard:{merchant_id}:{cycle}`), update `leaderboards`, log in `audit_logs`, track via PostHog (`leaderboard_reset`, 80%+ view rate).
+  - **GET** `/v1/api/leaderboards` (REST) | gRPC `/analytics.v1/AnalyticsService/GetLeaderboard`
+    - **Input**: `{ merchant_id: string, cycle: string, locale: string }`
+    - **Output**: `{ status: string, rankings: [{ customer_id: string, score: number, rank: number }], error: { code: string, message: string } | null }`
+    - **Flow**: Query Redis sorted set (`leaderboard:{merchant_id}:{cycle}`), generate Chart.js data, cache in Redis Streams (`leaderboard:{merchant_id}:{cycle}`), log in `audit_logs`, track via PostHog (`leaderboard_viewed`, 80%+ view rate).
+- **Service**: Analytics Service (gRPC: `/analytics.v1/*`, Dockerized).
+
+### 12. Customer Data Import (Phase 3)
+- **Goal**: Initialize loyalty programs with imported data. Success metric: 95%+ import success for 50,000+ records under 5 minutes, 90%+ data validation accuracy.
+- **Features**: Supports CSV imports (max 10MB, fields: `customer_id`, `email`, `points`, `rfm_score`, `lifecycle_stage`), encrypts PII (`email`, `rfm_score`) with AES-256 via pgcrypto, processes async via Bull queue (monitored in `QueuesPage.tsx` with Chart.js). Validates unique emails, checks RFM data format, notifies via Klaviyo/Postscript (3 retries, `en`, `es`, `de`, `ja`, `fr`, `pt`, `ru`, `it`, `nl`, `pl`, `tr`, `fa`, `zh-CN`, `vi`, `id`, `cs`, `ar`(RTL), `ko`, `uk`, `hu`, `sv`, `he`(RTL)).
+- **Sources**: Smile.io, LoyaltyLion, custom CSVs, Shopify Customer Export API.
+- **Scalability**: Handles 50,000+ records with Redis Streams (`import:{merchant_id}`), PostgreSQL partitioning, and circuit breakers.
+- **Database Design**:
+  - **Table**: `data_imports` (partitioned by `merchant_id`)
+    - `import_id` (text, PK, NOT NULL): Unique ID.
+    - `merchant_id` (text, FK → `merchants`, NOT NULL): Merchant.
+    - `source` (text, CHECK IN ('smile_io', 'loyaltylion', 'shopify', 'custom')): Source.
+    - `status` (text, CHECK IN ('pending', 'processing', 'completed', 'failed')): Status.
+    - `record_count` (integer, CHECK >= 0): Number of records.
+    - `error_log` (jsonb): e.g., `{"row": 10, "error": "Duplicate email"}`.
+    - `created_at` (timestamp(3), DEFAULT CURRENT_TIMESTAMP): Timestamp.
+  - **Table**: `customers`
+    - `email` (text, AES-256 ENCRYPTED, NOT NULL): Email.
+    - `rfm_score` (jsonb, AES-256 ENCRYPTED): e.g., `{"recency": 5, "frequency": 3, "monetary": 4}`.
+    - `lifecycle_stage` (text, CHECK IN ('new_lead', 'repeat_buyer', 'churned', 'vip')): Lifecycle stage.
+  - **Table**: `audit_logs`
+    - `action` (text, NOT NULL): e.g., `data_import_started`, `data_import_failed`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"source": "smile_io", "record_count": 5000}`.
+  - **Indexes**: `idx_data_imports_merchant_id_status` (btree: `merchant_id`, `status`), `idx_customers_email` (btree: `email`), `idx_audit_logs_action` (btree: `action`).
+  - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
+- **API Sketch**:
+  - **POST** `/v1/api/data/import` (REST) | gRPC `/admin.v1/AdminService/ImportCustomerData`
+    - **Input**: `{ merchant_id: string, source: string, file_url: string, locale: string }`
+    - **Output**: `{ status: string, import_id: string, error: { code: string, message: string } | null }`
+    - **Flow**: Validate CSV (max 10MB, unique emails), enqueue in Bull, insert into `data_imports`, cache in Redis Streams (`import:{merchant_id}`), notify via Klaviyo/Postscript, log in `audit_logs`, track via PostHog (`data_import_started`, 95%+ success rate).
+  - **GET** `/v1/api/data/import/status` (REST) | gRPC `/admin.v1/AdminService/GetImportStatus`
+    - **Input**: `{ merchant_id: string, import_id: string }`
+    - **Output**: `{ status: string, import: { status: string, record_count: number, error_log: object }, error: { code: string, message: string } | null }`
+    - **Flow**: Query `data_imports`, cache in Redis Streams (`import:{merchant_id}:{import_id}`), log in `audit_logs`, track via PostHog (`data_import_status_viewed`, 80%+ view rate).
+- **Service**: Admin Service (gRPC: `/admin.v1/*`, Dockerized).
+

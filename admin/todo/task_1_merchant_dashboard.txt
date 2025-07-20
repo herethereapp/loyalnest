@@ -1,0 +1,151 @@
+Tasks:  
+==========
+- **Merchant Dashboard (US-MD1, US-MD2, US-MD19–US-MD22)**:  
+  - Create Figma wireframes for Welcome Page, Points Program, Lifecycle Automation, Segment Benchmarking, Nudge A/B Testing, and Churn Risk Dashboard using Polaris `Card`, `Form`, `DataTable`, `Banner`, and Chart.js for RFM visualizations (e.g., Recency vs. Monetary scatter plot, `US-MD20`, `US-MD21`).  
+  - Include checkout extension config (Polaris `Form`, `Select`), notification templates with live preview (Polaris `TextField`, `Button`, `Frame`), rate limit monitoring (Chart.js line charts), usage thresholds (Polaris `Badge`), upgrade nudges (Polaris `Banner`, e.g., “Upgrade to unlock multi-store sharing”), and contextual tips (Polaris `CalloutCard`, e.g., “Add birthday bonus to boost referrals by 20%”).  
+  
+Wireframes:
+==========
+### Welcome Page (US-MD1)
+**Description**: Guides merchants through setup tasks and displays congratulatory messages.  
+**Components**:  
+- **Polaris `Card`**: Lists setup tasks, Tailwind `p-4`.  
+- **Polaris `Banner`**: Congratulatory messages or errors.  
+**Layout**:  
+- `Card` with task checklist (e.g., “Configure Points Program”).  
+- `Banner` at top for messages or errors.  
+**Accessibility**: ARIA label (`aria-label="Complete setup tasks"`), screen reader support, RTL for `ar`, `he` (Phase 6).  
+**Interactions**: Queries `/admin.v1/CompleteSetupTask` (G4a), logs to PostHog (`setup_task_completed`, L).  
+**Multilingual**: i18next (`en`, `es`, `fr`, `de`, `pt`, `ja` in Phases 2–5; others in Phase 6).  
+**Testing**: Jest (`WelcomePage.tsx`), Cypress E2E, k6 (1,000 views).  
+
+### Points Program (US-MD2)
+**Description**: Configures points earning and redemption settings.  
+**Components**:  
+- **Polaris `Form`**: Fields for points per dollar, redemption options, Tailwind `grid grid-cols-2`.  
+- **Polaris `Button`**: “Save” or “Toggle Status”.  
+- **Polaris `Banner`**: Confirmation or errors.  
+**Layout**:  
+- `Form` with input fields and toggle switch.  
+- `Banner` for confirmation or errors.  
+**Accessibility**: ARIA label (`aria-label="Configure points program"`), keyboard-navigable, RTL for `ar`, `he` (Phase 6).  
+**Interactions**: Updates `program_settings` (I7) via `/admin.v1/UpdatePointsProgram` (G4b), logs to PostHog (`points_configured`, L).  
+**Multilingual**: i18next (`en`, `es`, `fr`, `de`, `pt`, `ja` in Phases 2–5; others in Phase 6).  
+**Testing**: Jest (`PointsProgram.tsx`), Cypress E2E, k6 (1,000 updates).  
+
+### Lifecycle Automation (US-MD19)
+**Description**: Configures RFM/tier-based reward triggers.  
+**Components**:  
+- **Polaris `Form`**: Fields for triggers (e.g., “At-Risk → 100 points”), Tailwind `grid grid-cols-2`.  
+- **Polaris `Select`**: RFM/tier options.  
+- **Polaris `Banner`**: Confirmation or errors.  
+**Layout**:  
+- `Form` with trigger conditions and save button.  
+- `Banner` for confirmation or errors.  
+**Accessibility**: ARIA label (`aria-label="Configure lifecycle automation"`), keyboard-navigable, RTL for `ar`, `he` (Phase 6).  
+**Interactions**: Saves to `bonus_campaigns` (I17) via `/points.v1/CreateCampaign` (G1d), logs to PostHog (`lifecycle_campaign_triggered`, L).  
+**Multilingual**: i18next (`en`, `es`, `fr`, `de`, `pt`, `ja` in Phases 2–5; others in Phase 6).  
+**Testing**: Jest (`LifecycleAutomation.tsx`), Cypress E2E, k6 (5,000 triggers).  
+
+### Segment Benchmarking (US-MD20)
+**Description**: Shows RFM segment comparisons with industry benchmarks.  
+**Components**:  
+- **Polaris `Card`**: Chart.js bar chart for segments, Tailwind `p-4`.  
+- **Polaris `Banner`**: Errors (e.g., “No benchmark data”).  
+**Layout**:  
+- `Card` with Chart.js bar chart comparing segments.  
+- Error `Banner` at top if API fails.  
+**Accessibility**: ARIA label (`aria-live="Segment benchmark data available"`), screen reader support, RTL for `ar`, `he` (Phase 6).  
+**Interactions**: Queries `/analytics.v1/GetSegmentBenchmarks` (G3g), caches in Redis (`benchmarks:{merchant_id}`, J16), logs to PostHog (`benchmarks_viewed`, L).  
+**Multilingual**: i18next (`en`, `es`, `fr`, `de`, `pt`, `ja` in Phases 2–5; others in Phase 6).  
+**Testing**: Jest (`SegmentBenchmarking.tsx`), Cypress E2E, k6 (5,000 views).  
+
+### Nudge A/B Testing (US-MD21)
+**Description**: Configures and views A/B test results for nudges.  
+**Components**:  
+- **Polaris `Form`**: Fields for nudge variants, Tailwind `grid grid-cols-2`.  
+- **Polaris `Card`**: Chart.js bar chart for results.  
+- **Polaris `Banner`**: Confirmation or errors.  
+**Layout**:  
+- `Form` for variant configuration.  
+- `Card` with results chart.  
+- `Banner` for confirmation or errors.  
+**Accessibility**: ARIA label (`aria-label="Configure nudge A/B test"`), screen reader support, RTL for `ar`, `he` (Phase 6).  
+**Interactions**: Configures `program_settings.ab_tests` (I7) via `/analytics.v1/ConfigureNudgeABTest` (G3h), logs to PostHog (`nudge_ab_tested`, L).  
+**Multilingual**: i18next (`en`, `es`, `fr`, `de`, `pt`, `ja` in Phases 2–5; others in Phase 6).  
+**Testing**: Jest (`NudgeABTest.tsx`), Cypress E2E, k6 (5,000 interactions).  
+
+### Churn Risk Dashboard (US-MD22)
+**Description**: Lists high-spending At-Risk customers.  
+**Components**:  
+- **Polaris `DataTable`**: Customer details (ID, email, last order, RFM score), Tailwind `table-auto`.  
+- **Polaris `Banner`**: Errors (e.g., “No at-risk customers”).  
+**Layout**:  
+- `DataTable` with customer list.  
+- Error `Banner` at top if API fails.  
+**Accessibility**: ARIA label (`aria-label="View churn risk customers"`), screen reader support, RTL for `ar`, `he` (Phase 6).  
+**Interactions**: Queries `/analytics.v1/GetChurnRisk` (G3i), caches in Redis (`churn_risk:{merchant_id}`, J18), logs to PostHog (`churn_risk_viewed`, L).  
+**Multilingual**: i18next (`en`, `es`, `fr`, `de`, `pt`, `ja` in Phases 2–5; others in Phase 6).  
+**Testing**: Jest (`ChurnRiskDashboard.tsx`), Cypress E2E, k6 (5,000 views).  
+
+
+User Stories:
+=============
+
+**US-MD1: Complete Setup Tasks**  
+As a merchant, I want to complete setup tasks on the Welcome Page, so that I can launch my loyalty program.  
+**Acceptance Criteria**:  
+- Display tasks (e.g., "Launch Program", "Add Widget") from `program_settings` in Polaris `Checklist`.  
+- Allow checking tasks via `POST /v1/api/settings/setup`.  
+- Save progress to `merchants.setup_progress` (JSONB).  
+- Show congratulatory Polaris `Banner` on completion, localized via i18next (`en`, `es`, `fr`, `de`, `pt`, `ja`).  
+- Log to PostHog (`setup_completed`, 80%+ completion).  
+- **Accessibility**: ARIA label (`aria-label="Complete setup task"`), keyboard-navigable.  
+- **Testing**: Jest (`SetupPage.tsx`), Cypress E2E, k6 (1,000 merchants).
+
+**US-MD2: Configure Points Program**  
+As a merchant, I want to configure earning and redemption rules, so that I can customize the loyalty program.  
+**Acceptance Criteria**:  
+- Display form for earning (e.g., "10 points/$") and redemptions (e.g., "$5 off: 500 points") in Polaris `Form`.  
+- Save to `program_settings.config` (JSONB) via `PUT /v1/api/points-program`.  
+- Preview rewards panel branding in real-time.  
+- Toggle program status, localized via i18next (`en`, `es`, `fr`, `de`, `pt`, `ja`).  
+- Log to PostHog (`points_configured`, 80%+ usage).  
+- **Accessibility**: ARIA label (`aria-label="Configure points"`), WCAG 2.1 AA.  
+- **Testing**: Jest (`PointsPage.tsx`), Cypress, k6 (1,000 merchants).
+
+**US-MD19: Automate Lifecycle Rewards**  
+As a merchant, I want to automatically send rewards or campaigns when a customer’s RFM score drops or tier changes, so that I can re-engage them before they churn.  
+**Acceptance Criteria**:  
+- Display automation form for RFM/tier triggers in Polaris `Form`.  
+- Save to `bonus_campaigns` (JSONB) via `PUT /v1/api/campaigns/lifecycle`, trigger via Shopify Flow, localized via i18next.  
+- Log to PostHog (`lifecycle_campaign_triggered`, 15%+ redemption).  
+- **Accessibility**: ARIA label (`aria-label="Configure lifecycle automation"`), RTL support.  
+- **Testing**: Jest (`LifecyclePage.tsx`), Cypress, k6 (5,000 triggers).
+
+**US-MD20: View Segment Benchmarking**  
+As a merchant, I want to see how my loyalty segments compare with similar businesses, so that I can evaluate performance.  
+**Acceptance Criteria**:  
+- Display comparison from `rfm_segment_counts`, `rfm_benchmarks` via `GET /v1/api/rfm/benchmarks` in Chart.js bar chart.  
+- Ensure GDPR-compliant anonymized data, localized via i18next.  
+- Log to PostHog (`benchmarks_viewed`, 80%+ view rate).  
+- **Accessibility**: ARIA label (`aria-live="Segment benchmark data available"`), WCAG 2.1 AA.  
+- **Testing**: Jest (`BenchmarkingPage.tsx`), Cypress, k6 (5,000 views).
+
+**US-MD21: A/B Test Nudges**  
+As a merchant, I want to test different nudges with different copy or designs, so that I can optimize conversions.  
+**Acceptance Criteria**:  
+- Display form for A/B test variants in Polaris `Form`.  
+- Save to `program_settings.ab_tests` (JSONB) via `PUT /v1/api/nudges/ab-test`, show results in Chart.js, localized via i18next.  
+- Log to PostHog (`nudge_ab_tested`, 10%+ click-through).  
+- **Accessibility**: ARIA label (`aria-label="Configure nudge A/B test"`), RTL support.  
+- **Testing**: Jest (`NudgeABTestPage.tsx`), Cypress, k6 (5,000 nudges).
+
+**US-MD22: Identify Churn Risk Customers**  
+As a merchant, I want to see a list of high-spending customers at risk of churning, so that I can take action to win them back.  
+**Acceptance Criteria**:  
+- Display At-Risk customers (`rfm_segment_counts`) via `GET /v1/api/rfm/churn-risk` in Polaris `DataTable`.  
+- Support xAI API (Phase 6, https://x.ai/api), GDPR-compliant AES-256 encryption, localized via i18next.  
+- Log to PostHog (`churn_risk_viewed`, 80%+ view rate).  
+- **Accessibility**: ARIA label (`aria-label="View churn risk customers"`), RTL support.  
+- **Testing**: Jest (`ChurnRiskPage.tsx`), Cypress, k6 (5,000 views).
