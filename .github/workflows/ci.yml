@@ -1,0 +1,151 @@
+# .github/workflows/ci.yml
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npx eslint . --ext .ts,.tsx
+        working-directory: .
+
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type-checking
+        run: npx tsc --noEmit
+        working-directory: .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest tests
+        run: npx nx run-many --target=test --all
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [lint, type-check, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Nx projects
+        run: npx nx run-many --target=build --all
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker images
+        run: |
+          docker-compose build api-gateway
+          docker-compose build core-service
+          docker-compose build frontend
+          docker-compose push api-gateway
+          docker-compose push core-service
+          docker-compose push frontend
+          # Add other microservices as needed
+        working-directory: .
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli
+
+      - name: Deploy Shopify app
+        run: shopify app deploy
+        env:
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
+          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_SSH_PORT }}
+          script: |
+            # Pull latest Docker images
+            docker-compose -f /path/to/loyalnest/docker-compose.yml pull api-gateway core-service frontend
+            # Restart services
+            docker-compose -f /path/to/loyalnest/docker-compose.yml up -d
+            # Run Prisma migrations
+            docker-compose -f /path/to/loyalnest/docker-compose.yml exec core-service npx prisma migrate deploy --schema=/app/libs/db/prisma/schema.prisma

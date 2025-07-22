@@ -1,0 +1,7 @@
+{
+  "name": "@loyalnest/grpc-clients",
+  "version": "0.0.1",
+  "main": "src/index.ts",
+  "scripts": {},
+  "dependencies": {}
+}

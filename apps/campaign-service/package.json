@@ -1,0 +1,12 @@
+{
+  "name": "campaign-service",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch"
+  },
+  "dependencies": {
+    "@nestjs/schedule": "^4.0.0"
+  }
+}

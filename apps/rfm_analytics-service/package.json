@@ -1,0 +1,13 @@
+{
+  "name": "rfm_analytics-service",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch"
+  },
+  "dependencies": {
+    "@nestjs/typeorm": "^11.0.0",
+    "pg": "^8.16.2"
+  }
+}

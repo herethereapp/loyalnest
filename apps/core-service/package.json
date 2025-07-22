@@ -1,0 +1,12 @@
+{
+  "name": "core-service",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch"
+  },
+  "dependencies": {
+    "@shopify/shopify-api": "^11.13.0"
+  }
+}

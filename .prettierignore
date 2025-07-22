@@ -5,3 +5,6 @@ node_modules
 prisma
 public
 .shopify
+
+/.nx/cache
+/.nx/workspace-data
