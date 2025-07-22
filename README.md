@@ -61,5 +61,34 @@ npx nx g @nx/nest:application --name=frontend --directory=apps/frontend
 npx nx g @nx/nest:application --name=admin_core-service --directory=apps/admin_core-service
 
 ````
-$$ End $$
 
+=============
+Port for each service
+(2025/07/21)
+=============
+Service Name	Suggested Port
+auth-service		3001
+core-service		3002
+points-service		3003
+referrals-service		3004
+api-gateway		3005
+rfm_analytics-service	3006
+event_tracking-service	3007
+gamification-service	3008
+admin_core-service		3010
+admin_features-service	3011
+frontend			3020 (default 4173)
+products-service		3021
+campaign-service		3031
+
+===============
+to do
+===============
+update project documents by adding:
+core-service
+frontend
+products-service
+
+npx nx build core-service
+npx nx serve core-service
+npx nx test core-service

@@ -121,44 +121,34 @@ Develop a Shopify app, LoyalNest, delivering a customizable, user-friendly loyal
     - **Event Tracking Service**: `/v1/api/events` (PostHog: `points_earned`, `referral_completed`, `referral_fallback_triggered`, `rfm_updated`, `plan_limit_warning`, `campaign_discount_redeemed`, `rate_limit_viewed`).
     - **AdminCore Service**: `/admin/merchants`, `/admin/logs`, gRPC (`/admin.v1/GetMerchants`, `/admin.v1/GetAuditLogs`, `/admin.v1/HandleGDPRRequest`) (merchant management, GDPR webhooks, audit logs).
     - **AdminFeatures Service**: `/admin/points/adjust`, `/admin/referrals`, `/admin/rfm-segments`, `/admin/rfm/export`, `/admin/rfm/visualizations`, `/admin/notifications/template`, `/admin/rate-limits`, `/admin/rate-limits/queue`, `/admin/customers/import`, `/admin/queues`, `/v1/api/plan/usage`, `/admin/setup/stream`, `/admin/settings/currency`, `/admin/integrations/square`, `/admin/integrations/square/sync`, gRPC (`/admin.v1/UpdateNotificationTemplate`, `/admin.v1/GetRateLimits`, `/admin.v1/ImportCustomers`, `/admin.v1/StreamSetupProgress`, `/admin.v1/UpdateCurrencySettings`, `/admin.v1/ConfigureSquareIntegration`) (points adjustments, referrals, RFM segments, customer imports, notification templates, rate limit queue, integration health, onboarding, multi-currency settings).
-    - Inter-service communication: gRPC with circuit breakers for RFM Analytics/AdminCore/AdminFeatures; Kafka for events (`points.earned`, `referral.created`, `referral_fallback_triggered`, `customer.imported`).
-  - **Rust/Wasm**: Shopify Functions for discounts, checkout extensions, RFM updates, campaign discounts (JSONB `bonus_campaigns.conditions`).
+    - **Core-Service**: `/v1/api/core/merchants/config`, `/v1/api/core/webhooks` (centralized Shopify API integration, merchant settings management, webhook processing with idempotency via Redis, integration kill switch `US-AM15`, 3-step onboarding flow integration).
+    - **Products-Service**: `/v1/api/products/list`, `/v1/api/products/recommend`, `/v1/api/products/campaigns` (product catalog CRUD, RFM-based recommendations using TypeORM queries, campaign eligibility checks with JSONB `bonus_campaigns.conditions`).
+    - Inter-service communication: gRPC with circuit breakers for RFM Analytics/AdminCore/AdminFeatures; Kafka for events (`points.earned`, `referral.created`, `referral_fallback_triggered`, `customer.imported`, `product.recommended`, `webhook.processed`).
+  - **Rust/Wasm**: Shopify Functions for discounts, checkout extensions, RFM updates, campaign discounts, and product recommendation filters.
   - **Frontend**: Vite + React, Polaris, Tailwind CSS, App Bridge:
-    - Dashboard: `WelcomePage.tsx` (onboarding checklist, contextual tips), `PointsPage.tsx`, `ReferralsPage.tsx`, `AnalyticsPage.tsx` (RFM segments, Chart.js scatter plot for Recency vs. Monetary), `SettingsPage.tsx` (store, billing, rewards panel, checkout extensions, notification templates, rate limit monitoring, usage thresholds).
+    - Dashboard: `WelcomePage.tsx` (onboarding checklist, contextual tips), `PointsPage.tsx`, `ReferralsPage.tsx`, `AnalyticsPage.tsx` (RFM segments, Chart.js scatter plot for Recency vs. Monetary), `SettingsPage.tsx` (store, billing, rewards panel, checkout extensions, notification templates, rate limit monitoring, usage thresholds, core configurations).
     - Widget: `Widget.tsx` (points balance, redemption, referral popup, GDPR form), `ReferralProgress.tsx` (progress bar).
-    - Admin module: `AdminPage.tsx` (AdminCore: merchants, logs, GDPR; AdminFeatures: imports, templates, rate limits, Square sync), `QueuesPage.tsx`, `RateLimitsPage.tsx` (queue monitoring).
+    - Admin module: `AdminPage.tsx` (AdminCore: merchants, logs, GDPR; AdminFeatures: imports, templates, rate limits, Square sync, product management), `QueuesPage.tsx`, `RateLimitsPage.tsx` (queue monitoring).
     - i18n: `en`, `es`, `fr`, `de`, `pt`, `ja` via i18next, validated with 2–3 native speakers per language.
     - Accessibility: ARIA, keyboard nav, Lighthouse CI (90+ score).
-  - **Integrations**:
-    - Shopify: APIs (`orders/create`, batched), POS (offline mode), Checkout UI Extensions.
-    - Klaviyo/Postscript: SMS/email referrals, notification templates, AWS SES fallback.
-    - Yotpo/Judge.me: Points-for-reviews.
-    - Klaviyo/Mailchimp: Automated loyalty email flows (`US-BI1–BI3`).
-    - Square: POS integration with health checks and manual sync (`/admin/integrations/square/sync`).
-    - Async CSV import for customer data (Smile.io/LoyaltyLion migration, RBAC: `admin:full`).
-  - **Database**:
-    - PostgreSQL: JSONB (`customers.rfm_score`, `program_settings.rfm_thresholds`, `email_templates.body`), range partitioning (`points_transactions`, `referrals`, `reward_redemptions`, `created_at`), `rfm_segment_counts` materialized view (incremental refresh via `rfm_segment_deltas`, real-time on `orders/create`).
-    - Redis Cluster/Streams: Cache points (`points:{customer_id}`), referrals (`referral:{referral_code}`), RFM scores (`rfm:{customer_id}`), rate limits (`shopify_api_rate_limit:{merchant_id}`), rate limit queue (`rate_limit_queue:{merchant_id}`).
-  - **Security**:
-    - AES-256 encryption for PII (`customers.email`, `rfm_score`, `wallet_passes`) via pgcrypto.
+  - **Integrations**: Shopify APIs (`orders/create`, batched), POS (offline mode), Checkout UI Extensions, Klaviyo/Postscript (AWS SES fallback), Yotpo/Judge.me, Klaviyo/Mailchimp, Square, and new product-related integrations (e.g., product sync webhooks).
+  - **Database**: PostgreSQL: JSONB (`customers.rfm_score`, `program_settings.rfm_thresholds`, `email_templates.body`), range partitioning (`points_transactions`, `referrals`, `reward_redemptions`, `created_at`), `rfm_segment_counts` materialized view (incremental refresh via `rfm_segment_deltas`, real-time on `orders/create`), new tables: `core_configs` (merchant_id, settings JSONB, created_at, updated_at), `webhook_events` (event_id, merchant_id, event_type, payload JSONB, processed_at), `products` (product_id, merchant_id, title, price, rfm_score, campaign_eligible BOOLEAN, created_at, updated_at), `product_recommendations` (recommendation_id, customer_id, product_id, score, created_at).
+    - Redis Cluster/Streams: Cache points (`points:{customer_id}`), referrals (`referral:{referral_code}`), RFM scores (`rfm:{customer_id}`), rate limits (`shopify_api_rate_limit:{merchant_id}`), rate limit queue (`rate_limit_queue:{merchant_id}`), product caches (`products:{product_id}`).
+  - **Security**: AES-256 encryption for PII (`customers.email`, `rfm_score`, `wallet_passes`) via pgcrypto.
     - GDPR webhooks (`customers/data_request`, `customers/redact`) with retry logic (Redis dead-letter queue).
     - OWASP ZAP (ECL: 256), webhook idempotency (Redis).
-  - **Testing**:
-    - Unit/Integration: Jest for NestJS APIs, `cargo test` for Rust, RFM logic, campaign discounts, i18next fallbacks.
+  - **Testing**: Unit/Integration: Jest for NestJS APIs, `cargo test` for Rust, RFM logic, campaign discounts, i18next fallbacks.
     - E2E: Cypress for dashboard, widget, RFM UI, popups, GDPR form, referral status, notification templates, rate limit monitoring, checkout extensions, usage thresholds, RTL rendering (`ar`, `he` placeholders).
     - Load: k6 for 10,000 orders/hour (Shopify Plus: 40 req/s).
     - Resilience: Chaos Mesh for microservices.
-    - Test data factory: `test/factories/merchant.ts`, `test/factories/customer.ts`, `fixtures.rs` for merchants, customers, referrals, RFM scores.
-  - **Deployment**:
-    - VPS (Ubuntu, Docker Compose) for microservices, PostgreSQL, Redis Cluster, Kafka, Nginx, Loki, Prometheus.
-    - `dev.sh` script for Docker setup, mock data seeding (Faker), RFM simulation, rate limit simulation (standard vs. Plus).
+    - Test data factory: `test/factories/merchant.ts`, `test/factories/customer.ts`, `fixtures.rs` for merchants, customers, referrals, RFM scores, products, recommendations.
+  - **Deployment**: VPS (Ubuntu, Docker Compose) for microservices, PostgreSQL, Redis Cluster, Kafka, Nginx, Loki, Prometheus.
+    - `dev.sh` script for Docker setup, mock data seeding (Faker), RFM simulation, rate limit simulation (standard vs. Plus), product catalog seeding.
     - CI/CD: GitHub Actions with change detection, Lighthouse CI (90+ score), weekly backup validation (`restore.sh`).
     - Backups: `pg_dump`, Redis snapshotting, Backblaze B2 (90-day retention, RTO: 4 hours, RPO: 1 hour).
-  - **Monitoring**:
-    - Prometheus/Grafana (latency <1s, error rate <1%), Sentry, Loki (logs tagged with `shop_domain`, `merchant_id`, `service_name`), AWS SNS alerts (>100 points adjustments/hour).
+  - **Monitoring**: Prometheus/Grafana (latency <1s, error rate <1%), Sentry, Loki (logs tagged with `shop_domain`, `merchant_id`, `service_name`), AWS SNS alerts (>100 points adjustments/hour).
   - **Team**: 2 developers, in-house UI/UX, QA, using AI for code, tests, components, and scripts.
-- **Deliverables**:
-  - TVP with Must Have features and i18n (`en`, `es`, `fr`, `de`, `pt`, `ja`).
+- **Deliverables**: TVP with Must Have features and i18n (`en`, `es`, `fr`, `de`, `pt`, `ja`).
   - Admin module with AdminCore (merchants, logs, GDPR) and AdminFeatures (imports, templates, rate limits, Square sync).
   - Integrations: Shopify, Klaviyo/Postscript (AWS SES fallback), Yotpo, Klaviyo/Mailchimp, Square.
   - Test reports (Jest, Cypress, k6, Chaos Mesh).
@@ -250,15 +240,18 @@ Develop a Shopify app, LoyalNest, delivering a customizable, user-friendly loyal
   - **AdminFeatures**: `/admin/points/adjust`, `/admin/rate-limits`, `/admin/customers/import`, gRPC (`/admin.v1/*`) (imports, templates, rate limits, Square sync).
   - **Campaign**: `/api/campaigns/*` (discounts, RFM conditions).
   - **Gamification**: `/api/gamification/*` (badges, leaderboards).
+  - **Core-Service**: `/v1/api/core/*` (centralized business logic, Shopify API integration, merchant configuration, webhook handling).
+  - **Frontend**: Vite + React app (`/frontend/*`) (merchant dashboard, customer widget, admin module, checkout extensions).
+  - **Products-Service**: `/v1/api/products/*` (product catalog management, RFM-based product recommendations, campaign eligibility checks).
 - **APIs**:
   - REST: `/v1/api/*` for UI-facing endpoints, documented with OpenAPI/Swagger.
   - gRPC: `/analytics.v1/*`, `/admin.v1/*` for inter-service communication with circuit breakers.
   - Webhooks: `orders/create`, `customers/data_request`, `customers/redact` with idempotency (Redis).
-- **Schema**: `customers` (email, rfm_score, AES-256), `points_transactions`, `reward_redemptions` (campaign_id), `referrals` (referral_link_id, merchant_referral_id), `program_settings` (rfm_thresholds, JSONB), `email_templates` (body, JSONB), `gdpr_requests` (retention_expires_at), `rfm_segment_counts` (materialized view, daily refresh via `rfm_segment_deltas`, real-time on `orders/create`), `audit_logs`, `integrations`, `setup_tasks`, `merchant_settings` (currencies: JSONB), `customer_badges`, `leaderboard_rankings`, `merchant_feedback`.
+- **Schema**: `customers` (email, rfm_score, AES-256), `points_transactions`, `reward_redemptions` (campaign_id), `referrals` (referral_link_id, merchant_referral_id), `program_settings` (rfm_thresholds, JSONB), `email_templates` (body, JSONB), `gdpr_requests` (retention_expires_at), `rfm_segment_counts` (materialized view, daily refresh via `rfm_segment_deltas`, real-time on `orders/create`), `audit_logs`, `integrations`, `setup_tasks`, `merchant_settings` (currencies: JSONB), `customer_badges`, `leaderboard_rankings`, `merchant_feedback`, `core_configs` (merchant_id, settings JSONB, created_at, updated_at), `webhook_events` (event_id, merchant_id, event_type, payload JSONB, processed_at), `products` (product_id, merchant_id, title, price, rfm_score, campaign_eligible BOOLEAN, created_at, updated_at), `product_recommendations` (recommendation_id, customer_id, product_id, score, created_at).
 - **Security**: AES-256 encryption (pgcrypto), GDPR webhooks with retries (Redis dead-letter queue), OWASP ZAP (ECL: 256), RBAC (Auth0, roles: `admin:full`, `admin:analytics`, `admin:support`).
 - **Deployment**: VPS (Ubuntu, Docker Compose) with Nginx, `dev.sh` for local setup, `restore.sh` for backup validation, CI/CD (GitHub Actions, change detection, Lighthouse CI), Backblaze B2 backups (RTO: 4 hours, RPO: 1 hour).
 - **Monitoring**: Prometheus/Grafana (latency <1s, error rate <1%), Sentry, Loki (logs tagged with `shop_domain`, `merchant_id`, `service_name`), AWS SNS alerts.
-- **Testing**: Jest (unit/integration, i18next fallbacks, 80%+ coverage), Cypress (E2E, RTL rendering for `ar`, `he`), k6 (1,000 orders/hour in Phase 2, 10,000 in Phase 3), Chaos Mesh, Lighthouse CI (90+ score), test data factory (`test/factories/*.ts`, `fixtures.rs`).
+- **Testing**: Jest (80%+ coverage, i18next fallbacks), Cypress (E2E, RTL rendering for `ar`, `he`), k6 (1,000 orders/hour in Phase 2, 10,000 in Phase 3), Chaos Mesh, Lighthouse CI (90+ score), test data factory (`test/factories/*.ts`, `fixtures.rs`).
 - **i18n**: i18next for `en`, `es`, `fr`, `de`, `pt`, `ja` (Phases 2–5), remaining languages (Phase 6), with Jest/Cypress tests for translation accuracy and RTL rendering, validated by 2–3 native speakers per language.
 
 ## Budget Allocation
@@ -281,9 +274,8 @@ Develop a Shopify app, LoyalNest, delivering a customizable, user-friendly loyal
 - **Integration Reliability**: AWS SES fallback for Klaviyo/Postscript (`referral_fallback_triggered`), health checks and manual sync for Square (`/admin/integrations/square/sync`), kill switches (`US-AM15`), Grafana monitoring.
 
 ## Appendices
-- **API Endpoints**:
-  - REST: `/v1/api/auth/login`, `/v1/api/points/earn`, `/v1/api/referrals/progress`, `/v1/api/rfm/segments`, `/admin/rate-limits`, `/admin/rate-limits/queue`, `/admin/notifications/template`, `/admin/integrations/square/sync`.
+  - REST: `/v1/api/auth/login`, `/v1/api/points/earn`, `/v1/api/referrals/progress`, `/v1/api/rfm/segments`, `/admin/rate-limits`, `/admin/rate-limits/queue`, `/admin/notifications/template`, `/admin/integrations/square/sync`, `/v1/api/core/merchants/config`, `/v1/api/core/webhooks`, `/v1/api/products/list`, `/v1/api/products/recommend`, `/v1/api/products/campaigns`.
   - gRPC: `/analytics.v1/RFMAnalyticsService/GetSegments`, `/admin.v1/AdminCoreService/GetMerchants`, `/admin.v1/AdminFeaturesService/UpdateNotificationTemplate`.
-- **Schema Details**: `loyalnest_full_schema.sql` with indexes on `customers(email, merchant_id, rfm_score)`, `points_transactions(customer_id)`, `referrals(merchant_id, referral_link_id, merchant_referral_id)`, `reward_redemptions(campaign_id)`, `gdpr_requests(retention_expires_at)`, `rfm_segment_counts`, `audit_logs`.
+- **Schema Details**: `loyalnest_full_schema.sql` with indexes on `customers(email, merchant_id, rfm_score)`, `points_transactions(customer_id)`, `referrals(merchant_id, referral_link_id, merchant_referral_id)`, `reward_redemptions(campaign_id)`, `gdpr_requests(retention_expires_at)`, `rfm_segment_counts`, `audit_logs`, `core_configs(merchant_id)`, `webhook_events(event_id, merchant_id)`, `products(product_id, merchant_id)`, `product_recommendations(customer_id, product_id)`.
 - **Testing Plan**: Jest (80%+ coverage, i18next fallbacks), Cypress (dashboard, widget, GDPR form, referral status, notification templates, rate limits, RTL rendering), k6 (10,000 orders/hour), Chaos Mesh, Lighthouse CI (90+ score).
 - **Deployment Guide**: Docker Compose, Nginx, `dev.sh`, `restore.sh`, Backblaze B2 setup instructions (RTO: 4 hours, RPO: 1 hour).

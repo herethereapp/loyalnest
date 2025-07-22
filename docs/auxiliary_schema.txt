@@ -364,6 +364,8 @@ CREATE TABLE queue_tasks (
     status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed', 'failed')) DEFAULT 'pending',
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     retry_count INT NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+    priority INT NOT NULL DEFAULT 0 CHECK (priority >= 0),
+    channel VARCHAR(50) NOT NULL DEFAULT 'email' CHECK (channel IN ('email', 'sms', 'whatsapp')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     scheduled_at TIMESTAMP WITH TIME ZONE,
@@ -374,6 +376,8 @@ CREATE INDEX idx_queue_tasks_task_type ON queue_tasks(task_type);
 CREATE INDEX idx_queue_tasks_status ON queue_tasks(status);
 CREATE INDEX idx_queue_tasks_created_at ON queue_tasks(created_at);
 CREATE INDEX idx_queue_tasks_scheduled_at ON queue_tasks(scheduled_at);
+CREATE INDEX idx_queue_tasks_priority ON queue_tasks(priority);
+CREATE INDEX idx_queue_tasks_channel ON queue_tasks(channel);
 
 CREATE TABLE queue_tasks_p0 PARTITION OF queue_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 0);
 CREATE TABLE queue_tasks_p1 PARTITION OF queue_tasks FOR VALUES WITH (MODULUS 8, REMAINDER 1);
@@ -416,3 +420,65 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER api_tokens_audit_trigger
 AFTER INSERT OR UPDATE OR DELETE ON api_tokens
 FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TABLE rate_limit_tracking (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    endpoint VARCHAR(255) NOT NULL,
+    request_count INT NOT NULL DEFAULT 0 CHECK (request_count >= 0),
+    limit_threshold INT NOT NULL,
+    last_reset TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('normal', 'warning', 'critical')) DEFAULT 'normal',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_rate_limit_tracking_merchant_id ON rate_limit_tracking(merchant_id);
+CREATE INDEX idx_rate_limit_tracking_endpoint ON rate_limit_tracking(endpoint);
+CREATE INDEX idx_rate_limit_tracking_status ON rate_limit_tracking(status);
+CREATE INDEX idx_rate_limit_tracking_last_reset ON rate_limit_tracking(last_reset);
+
+CREATE TABLE rate_limit_tracking_p0 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE rate_limit_tracking_p1 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE rate_limit_tracking_p2 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE rate_limit_tracking_p3 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE rate_limit_tracking_p4 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE rate_limit_tracking_p5 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE rate_limit_tracking_p6 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE rate_limit_tracking_p7 PARTITION OF rate_limit_tracking FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+CREATE TRIGGER trg_rate_limit_tracking_updated_at
+BEFORE UPDATE ON rate_limit_tracking
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER rate_limit_tracking_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON rate_limit_tracking
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TABLE pos_offline_queue (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    transaction_type VARCHAR(50) NOT NULL CHECK (transaction_type IN ('earn', 'redeem')),
+    points INT NOT NULL,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'synced', 'failed')) DEFAULT 'pending',
+    sync_attempt_count INT NOT NULL DEFAULT 0 CHECK (sync_attempt_count >= 0),
+    last_sync_attempt TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (merchant_id);
+CREATE INDEX idx_pos_offline_queue_merchant_id ON pos_offline_queue(merchant_id);
+CREATE INDEX idx_pos_offline_queue_status ON pos_offline_queue(status);
+CREATE INDEX idx_pos_offline_queue_created_at ON pos_offline_queue(created_at);
+
+CREATE TABLE pos_offline_queue_p0 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE pos_offline_queue_p1 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE pos_offline_queue_p2 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE pos_offline_queue_p3 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE pos_offline_queue_p4 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE pos_offline_queue_p5 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE pos_offline_queue_p6 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE pos_offline_queue_p7 PARTITION OF pos_offline_queue FOR VALUES WITH (MODULUS 8, REMAINDER 7);
+
+CREATE TRIGGER pos_offline_queue_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON pos_offline_queue
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+

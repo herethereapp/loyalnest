@@ -258,8 +258,31 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to refresh rfm_segment_counts incrementally
+-- Update function to process in batches
 CREATE OR REPLACE FUNCTION refresh_rfm_segment_counts() RETURNS VOID AS $$
+DECLARE
+    v_batch_size INT := 1000;
+    v_total_rows INT;
+BEGIN
+    PERFORM pg_advisory_lock(123456789);
+    SELECT COUNT(*) INTO v_total_rows
+    FROM rfm_segment_deltas
+    WHERE created_at > (SELECT COALESCE(MAX(last_refreshed), '1970-01-01'::TIMESTAMP WITH TIME ZONE) FROM rfm_segment_counts);
+
+    FOR i IN 0..(v_total_rows / v_batch_size) LOOP
+        PERFORM refresh_rfm_segment_counts_batch(i * v_batch_size, v_batch_size);
+    END LOOP;
+    PERFORM pg_advisory_unlock(123456789);
+EXCEPTION
+    WHEN OTHERS THEN
+        INSERT INTO audit_logs (merchant_id, action, severity, metadata, created_at)
+        VALUES (NULL, 'refresh_rfm_segment_counts_failed', 'critical', jsonb_build_object('error', SQLERRM, 'state', SQLSTATE), CURRENT_TIMESTAMP);
+        PERFORM pg_advisory_unlock(123456789);
+        RAISE;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION refresh_rfm_segment_counts_batch(p_offset INT, p_limit INT) RETURNS VOID AS $$
 DECLARE
     v_delta RECORD;
     v_segment_id VARCHAR;
@@ -267,12 +290,12 @@ DECLARE
     v_segment_name JSONB;
     v_conditions JSONB;
 BEGIN
-    PERFORM pg_advisory_lock(123456789);
     FOR v_delta IN (
         SELECT id, merchant_id, customer_id, rfm_score, metadata, operation, created_at
         FROM rfm_segment_deltas
         WHERE created_at > (SELECT COALESCE(MAX(last_refreshed), '1970-01-01'::TIMESTAMP WITH TIME ZONE) FROM rfm_segment_counts)
         ORDER BY created_at
+        LIMIT p_limit OFFSET p_offset
     ) LOOP
         v_segment_id := 'seg_' || (v_delta.rfm_score->>'recency') || (v_delta.rfm_score->>'frequency') || (v_delta.rfm_score->>'monetary');
         v_lifecycle_stage := v_delta.metadata->>'lifecycle_stage';
@@ -344,33 +367,6 @@ BEGIN
         END IF;
         DELETE FROM rfm_segment_deltas WHERE id = v_delta.id;
     END LOOP;
-
-    DELETE FROM rfm_segment_counts WHERE count = 0;
-
-    INSERT INTO analytics_reports (merchant_id, report_type, data, created_at)
-    SELECT
-        merchant_id, 'rfm_trends' AS report_type,
-        jsonb_agg(
-            jsonb_build_object(
-                'segment_id', segment_id, 'name', name, 'count', count, 'conditions', conditions
-            )
-        ) AS data,
-        CURRENT_TIMESTAMP
-    FROM rfm_segment_counts
-    GROUP BY merchant_id
-    ON CONFLICT (merchant_id, report_type)
-    DO UPDATE SET data = EXCLUDED.data, created_at = CURRENT_TIMESTAMP;
-
-    PERFORM pg_advisory_unlock(123456789);
-EXCEPTION
-    WHEN OTHERS THEN
-        INSERT INTO audit_logs (merchant_id, action, severity, metadata, created_at)
-        VALUES (
-            NULL, 'refresh_rfm_segment_counts_failed', 'critical',
-            jsonb_build_object('error', SQLERRM, 'state', SQLSTATE), CURRENT_TIMESTAMP
-        );
-        PERFORM pg_advisory_unlock(123456789);
-        RAISE;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -725,6 +721,7 @@ CREATE INDEX idx_rfm_segment_counts_merchant_id ON rfm_segment_counts(merchant_i
 CREATE INDEX idx_rfm_segment_counts_segment_id ON rfm_segment_counts(segment_id);
 CREATE INDEX idx_rfm_segment_counts_report_id ON rfm_segment_counts(report_id);
 CREATE INDEX idx_rfm_segment_counts_last_refreshed ON rfm_segment_counts(last_refreshed);
+CREATE INDEX idx_rfm_segment_counts_last_updated ON rfm_segment_counts(last_refreshed);
 
 CREATE TABLE rfm_segment_counts_p0 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 0);
 CREATE TABLE rfm_segment_counts_p1 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 1);
@@ -734,7 +731,7 @@ CREATE TABLE rfm_segment_counts_p4 PARTITION OF rfm_segment_counts FOR VALUES WI
 CREATE TABLE rfm_segment_counts_p5 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 5);
 CREATE TABLE rfm_segment_counts_p6 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 6);
 CREATE TABLE rfm_segment_counts_p7 PARTITION OF rfm_segment_counts FOR VALUES WITH (MODULUS 8, REMAINDER 7);
-
+CREATE INDEX idx_rfm_segment_counts_last_updated ON rfm_segment_counts(last_refreshed);
 CREATE TRIGGER rfm_segment_counts_audit_trigger
 AFTER INSERT OR UPDATE OR DELETE ON rfm_segment_counts
 FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
@@ -764,4 +761,23 @@ CREATE TABLE rfm_score_history_p7 PARTITION OF rfm_score_history FOR VALUES WITH
 
 CREATE TRIGGER rfm_score_history_audit_trigger
 AFTER INSERT OR UPDATE OR DELETE ON rfm_score_history
+FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();
+
+CREATE TABLE customer_import_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    total_records INT NOT NULL,
+    processed_records INT NOT NULL DEFAULT 0 CHECK (processed_records >= 0),
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed', 'failed')) DEFAULT 'pending',
+    error_details JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+CREATE INDEX idx_customer_import_logs_merchant_id ON customer_import_logs(merchant_id);
+CREATE INDEX idx_customer_import_logs_status ON customer_import_logs(status);
+CREATE INDEX idx_customer_import_logs_created_at ON customer_import_logs(created_at);
+
+CREATE TRIGGER customer_import_logs_audit_trigger
+AFTER INSERT OR UPDATE OR DELETE ON customer_import_logs
 FOR EACH ROW EXECUTE FUNCTION trigger_audit_log();

@@ -1,5 +1,21 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "allowJs": false,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/app/*"],
+      "@components/*": ["src/components/*"],
+      "src/main": ["src/main.tsx"],
+      "src/styles": ["src/styles.css"],
+      "./app/app": ["src/app/app.tsx"],
+      "./nx-welcome": ["src/app/nx-welcome.tsx"]
+    }
+  },
   "files": [],
   "include": [],
   "references": [
@@ -10,7 +26,5 @@
       "path": "./tsconfig.spec.json"
     }
   ],
-  "compilerOptions": {
-    "esModuleInterop": true
-  }
+  "extends": "../../tsconfig.base.json"
 }

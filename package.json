@@ -11,13 +11,11 @@
   "directories": {
     "doc": "docs"
   },
-"overrides": {
-    "@nestjs/core": "^11.1.3",
-    "@nestjs/common": "^11.1.3",
-    "@nestjs/platform-express": "^11.1.3",
-    "@prisma/client": "^6.2.1",
-    "pg": "^8.16.2",
-    "@shopify/shopify-api": "^11.13.0"
+  "overrides": {
+    "@graphql-tools/url-loader": "8.0.16",
+    "@graphql-codegen/client-preset": "4.7.0",
+    "@graphql-codegen/typescript-operations": "4.5.0",
+    "minimatch": "9.0.5"
   },
   "scripts": {
     "frontend:dev": "nx serve frontend",
@@ -46,10 +44,18 @@
     "test": "nx run-many --target=test --projects=core-service,frontend"
   },
   "dependencies": {
-    "@nestjs/common": "^11.1.3",
+    "@nestjs/axios": "^4.0.0",
+    "@nestjs/common": "^11.1.5",
     "@nestjs/config": "^4.0.2",
-    "@nestjs/core": "^11.1.3",
-    "@nestjs/platform-express": "^11.1.3",
+    "@nestjs/core": "^11.1.5",
+    "@nestjs/cqrs": "^11.0.0",
+    "@nestjs/event-emitter": "^3.0.0",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/mongoose": "^11.0.0",
+    "@nestjs/passport": "^11.0.0",
+    "@nestjs/platform-express": "^11.1.5",
+    "@nestjs/schedule": "^5.0.0",
+    "@nestjs/typeorm": "^11.0.0",
     "@prisma/client": "^6.2.1",
     "@shopify/app-bridge-react": "^4.1.6",
     "@shopify/polaris": "^12.0.0",
@@ -63,48 +69,71 @@
     "isbot": "^5.1.0",
     "joi": "^17.13.3",
     "multer": "^2.0.1",
+    "nestjs-twilio": "^4.4.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
     "pg": "^8.16.2",
-    "prisma": "^6.2.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-progress-bar": "^0.1.0",
+    "react-router-dom": "6.29.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "twilio": "^5.7.3"
   },
   "devDependencies": {
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.1.5",
     "@nrwl/devkit": "^19.8.14",
     "@nrwl/workspace": "^19.8.14",
-    "@nx/devkit": "^21.3.0",
-    "@nx/eslint": "^21.3.0",
-    "@nx/jest": "^21.3.0",
-    "@nx/js": "21.3.1",
+    "@nx/cypress": "21.3.1",
+    "@nx/devkit": "21.3.1",
+    "@nx/eslint": "21.3.1",
+    "@nx/jest": "21.3.1",
+    "@nx/js": "21.3.2",
     "@nx/nest": "21.3.1",
     "@nx/node": "21.3.1",
+    "@nx/react": "^21.3.1",
+    "@nx/vite": "^21.3.1",
     "@nx/web": "21.3.1",
-    "@nx/webpack": "21.3.1",
-    "@nx/workspace": "^21.3.0",
+    "@nx/workspace": "21.3.1",
     "@shopify/cli": "^3.82.0",
     "@swc-node/register": "^1.10.0",
+    "@swc/cli": "~0.6.0",
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",
+    "@testing-library/dom": "10.4.0",
+    "@testing-library/react": "16.1.0",
     "@types/jest": "^29.4.0",
     "@types/node": "^24.0.3",
-    "@types/react": "^18.2.31",
-    "@types/react-dom": "^18.2.14",
+    "@types/react": "18.3.1",
+    "@types/react-dom": "18.3.0",
+    "@vitejs/plugin-react": "^4.6.0",
+    "@vitest/ui": "^3.0.0",
+    "babel-jest": "^30.0.2",
     "concurrently": "^8.0.0",
+    "cypress": "^14.2.1",
     "eslint": "^9.31.0",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-cypress": "^3.5.0",
+    "eslint-plugin-import": "2.31.0",
+    "eslint-plugin-jsx-a11y": "6.10.1",
+    "eslint-plugin-react": "7.35.0",
+    "eslint-plugin-react-hooks": "5.0.0",
     "jest": "^30.0.0",
+    "jest-environment-jsdom": "^30.0.2",
     "jest-environment-node": "^29.4.1",
-    "nx": "^21.3.0",
+    "jiti": "2.4.2",
+    "jsdom": "~22.1.0",
+    "nx": "^21.3.2",
     "prettier": "^3.2.4",
+    "prisma": "^6.2.1",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
     "vite": "^6.2.2",
-    "webpack-cli": "^5.1.4"
+    "vitest": "^3.0.0"
   },
   "workspaces": [
     "apps/*"
@@ -112,15 +141,9 @@
   "trustedDependencies": [
     "@shopify/plugin-cloudflare"
   ],
-  "overrides": {
-    "@graphql-tools/url-loader": "8.0.16",
-    "@graphql-codegen/client-preset": "4.7.0",
-    "@graphql-codegen/typescript-operations": "4.5.0",
-    "minimatch": "9.0.5"
-  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/herethereapp/loyalnest.git"
+    "url": "https://github.com/herethereapp/loyalnest.git"
   },
   "keywords": [
     "shopify",
