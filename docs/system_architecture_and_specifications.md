@@ -5,7 +5,7 @@ The LoyalNest Shopify app is a loyalty and rewards platform designed to enhance 
 
 ## 2. System Objectives
 - **Scalability**: Support 5,000+ merchants, with Plus merchants handling 50,000+ customers and 10,000 orders/hour during peak events (e.g., Black Friday).
-- **Modularity**: Utilize microservices (Core, Auth, Points, Referrals, RFM Analytics, Event Tracking, AdminCore, AdminFeatures, Campaign, Gamification, Frontend, Products) for independent development and deployment, managed via Nx monorepo.
+- **Modularity**: Utilize microservices (API Gateway, Core, Auth, Points, Referrals, RFM Analytics, Event Tracking, AdminCore, AdminFeatures, Campaign, Gamification, Frontend, Products) for independent development and deployment, managed via Nx monorepo.
 - **Shopify Compliance**: Adhere to Shopify APIs (2025-01), OAuth, webhooks (`orders/create`, GDPR), POS with offline mode, Checkout UI Extensions, and Shopify Flow templates (Phase 5).
 - **GDPR/CCPA Compliance**: Encrypt PII (`customers.email`, `rfm_score`) with AES-256 via `pgcrypto`, handle GDPR webhooks (`customers/data_request`, `customers/redact`) with retries, and enforce 90-day retention (`gdpr_requests.retention_expires_at`).
 - **Performance**: Achieve API responses <200ms using Redis Cluster caching, PostgreSQL range partitioning, and circuit breakers; coordinate Shopify API rate limits (2 req/s standard, 40 req/s Plus).
@@ -17,63 +17,68 @@ The LoyalNest Shopify app is a loyalty and rewards platform designed to enhance 
 The system is built on a microservices architecture, orchestrated with Docker Compose and deployed on a VPS (Ubuntu, Nginx with gRPC proxy). It uses REST APIs for UI-facing endpoints, gRPC for inter-service communication, Kafka for async events, WebSocket for real-time updates, and a combination of PostgreSQL, Redis Cluster, and Loki for data storage, caching, and logging.
 
 ### 3.1 Microservices
-The system comprises twelve microservices, each built with NestJS (TypeScript) and Rust/Wasm for Shopify Functions, managed in an Nx monorepo:
-1. **Core Service**:
+The system comprises thirteen microservices, each built with NestJS (TypeScript) and Rust/Wasm for Shopify Functions, managed in an Nx monorepo:
+1. **API Gateway**:
+   - **Purpose**: Acts as the entry point for all external API requests, handling routing, load balancing, rate limiting, and authentication verification before forwarding requests to appropriate microservices.
+   - **Endpoints**: `/v1/api/*` (proxies to Core, Points, Referrals, RFM Analytics, etc.), `/admin/*` (proxies to AdminCore, AdminFeatures).
+   - **Tech**: NestJS, `@nestjs/microservices`, Nginx (reverse proxy, rate limiting), Redis Cluster (`api_rate_limit:{merchant_id}`), OpenAPI/Swagger for API documentation.
+   - **Interactions**: Validates JWTs with Auth Service, enforces Shopify API rate limits, routes requests via gRPC or REST, caches responses in Redis, and logs request metrics to Loki.
+2. **Core Service**:
    - **Purpose**: Centralizes core business logic, configuration management, and inter-service coordination, including global settings, plan enforcement (freemium-to-Plus funnel), and usage thresholds.
    - **Endpoints**: `/v1/api/core/settings`, `/v1/api/core/usage`, `/v1/api/core/plan`.
    - **Tech**: NestJS, PostgreSQL (`program_settings`, `merchant_plans`), Redis Cluster (`config:{merchant_id}`, `usage:{merchant_id}`), Kafka (event publishing).
    - **Interactions**: Provides centralized configuration to all services, publishes `plan_limit_warning` to Kafka, and coordinates upgrade nudges via WebSocket.
-2. **Auth Service**:
+3. **Auth Service**:
    - **Purpose**: Manages Shopify OAuth, JWT authentication (15-minute expiry, revocation list in Redis), MFA via Auth0, and RBAC (`admin:full`, `admin:analytics`, `admin:support`, `admin:points`).
    - **Endpoints**: `/v1/api/auth/login`, `/v1/api/auth/refresh`, `/v1/api/auth/roles`, `/v1/api/auth/mfa`, `/admin/v1/auth/revoke`.
    - **Tech**: NestJS, `@shopify/shopify-app-express`, Redis Cluster (`jwt:{merchant_id}`, `revoked_jti:{token_id}`), PostgreSQL (`merchants.staff_roles: JSONB`).
    - **Interactions**: Validates tokens for dashboard and admin module, uses gRPC to fetch roles from Core Service, supports MFA and revocation for Shopify Plus.
-3. **Points Service**:
+4. **Points Service**:
    - **Purpose**: Manages points earning/redemption, Shopify POS with offline mode, checkout extensions, campaign discounts, and real-time streaming.
    - **Endpoints**: `/v1/api/points/earn`, `/v1/api/points/redeem`, `/v1/api/points/adjust`, `/v1/api/rewards`, `/v1/api/points/sync`, `/api/points/stream` (WebSocket).
    - **Tech**: NestJS, Rust/Wasm (Shopify Functions for discounts), PostgreSQL (`points_transactions`, `reward_redemptions`), Redis Cluster (`points:customer:{id}`), `socket.io`/`ws`.
    - **Interactions**: Processes `orders/create` webhooks, syncs POS data via SQLite queue, applies checkout extensions, streams updates, and publishes `points.earned` to Kafka.
-4. **Referrals Service**:
+5. **Referrals Service**:
    - **Purpose**: Manages SMS/email referrals, referral status with progress bar, and error handling with fallback to AWS SES.
    - **Endpoints**: `/v1/api/referrals/create`, `/v1/api/referrals/complete`, `/v1/api/referrals/status`, `/v1/api/referrals/progress`.
    - **Tech**: NestJS, Klaviyo/Postscript (SMS/email, 5s timeout, 3 retries), AWS SES (fallback), Bull queues, PostgreSQL (`referrals`), Redis Streams (`referral:{code}`, `referral:status:{id}`).
    - **Interactions**: Generates referral links, sends notifications, tracks conversion (7%+ target), handles errors, logs fallback events to PostHog, and publishes `referral.created` to Kafka.
-5. **RFM Analytics Service**:
+6. **RFM Analytics Service**:
    - **Purpose**: Provides basic RFM analytics with time-weighted recency, lifecycle stages, and visualizations (e.g., Recency vs. Monetary scatter plot).
    - **Endpoints**: `/v1/api/rfm/segments`, `/v1/api/rfm/segments/preview`, `/v1/api/rfm/nudges`, `/api/rfm/visualizations`, gRPC (`/analytics.v1/GetSegments`, `/analytics.v1/PreviewRFMSegments`, `/analytics.v1/GetNudges`).
    - **Tech**: NestJS, Rust/Wasm (real-time RFM updates), PostgreSQL (`customers.rfm_score: JSONB`, `rfm_segment_counts`, `rfm_segment_deltas`, `rfm_score_history`), Redis Streams (`rfm:customer:{id}`, `rfm:preview:{merchant_id}`).
    - **Interactions**: Calculates RFM scores, refreshes daily (`0 1 * * *`) and incrementally on `orders/create`, caches in Redis Streams.
-6. **Event Tracking Service**:
+7. **Event Tracking Service**:
    - **Purpose**: Tracks feature usage and events for analytics and merchant engagement.
    - **Endpoints**: `/v1/api/events`.
    - **Tech**: NestJS, PostHog, Kafka.
    - **Interactions**: Captures events (e.g., `points_earned`, `referral_clicked`, `gdpr_request_submitted`) and sends to PostHog via Kafka.
-7. **AdminCore Service**:
+8. **AdminCore Service**:
    - **Purpose**: Manages merchant accounts, GDPR requests, and audit logs.
    - **Endpoints**: `/admin/merchants`, `/admin/logs`, gRPC (`/admin.v1/GetMerchants`, `/admin.v1/GetAuditLogs`, `/admin.v1/HandleGDPRRequest`).
    - **Tech**: NestJS, PostgreSQL (`gdpr_requests`, `audit_logs`, `merchants`), Redis Streams (logs, `audit_logs:{merchant_id}`), Kafka (async logging), `socket.io`/`ws`, Nginx (IP allowlisting, HMAC).
    - **Interactions**: Handles GDPR webhooks with retries, RBAC with IP allowlisting, real-time log streaming, and Typeform feedback integration.
-8. **AdminFeatures Service**:
+9. **AdminFeatures Service**:
    - **Purpose**: Manages points adjustments, referrals, RFM segments, customer imports, notification templates, rate limits, integration health, onboarding, multi-currency settings, and feedback.
    - **Endpoints**: `/admin/points/adjust`, `/admin/referrals`, `/admin/rfm-segments`, `/admin/rfm/export`, `/admin/notifications/template`, `/admin/rate-limits`, `/admin/customers/import`, `/v1/api/plan/usage`, `/admin/setup/stream`, `/admin/settings/currency`, `/admin/integrations/square/sync`, `/admin/v1/feedback`, gRPC (`/admin.v1/UpdateNotificationTemplate`, `/admin.v1/GetRateLimits`, `/admin.v1/ImportCustomers`, `/admin.v1/SyncSquarePOS`).
    - **Tech**: NestJS, PostgreSQL (`email_templates: JSONB`, `integrations`, `setup_tasks`, `merchant_settings`), Redis Streams (rate limits, `setup_tasks:{merchant_id}`), Bull queues (imports, exports, rate limit throttling), `socket.io`/`ws`, Nginx (IP allowlisting, HMAC).
    - **Interactions**: Manages rate limit queues, async CSV imports, notification templates, integration health, onboarding progress, and SLO dashboard.
-9. **Campaign Service**:
-   - **Purpose**: Manages Shopify Discounts API campaigns.
-   - **Endpoints**: `/api/campaigns`, `/api/campaigns/{id}`, gRPC (`/campaign.v1/CreateCampaign`, `/campaign.v1/GetCampaign`).
-   - **Tech**: NestJS, Rust/Wasm (Shopify Functions), PostgreSQL (`campaigns: JSONB`), Redis Cluster (`campaign:{campaign_id}`).
-   - **Interactions**: Creates/applies campaign discounts and publishes `campaign_created` to Kafka.
-10. **Gamification Service**:
+10. **Campaign Service**:
+    - **Purpose**: Manages Shopify Discounts API campaigns.
+    - **Endpoints**: `/api/campaigns`, `/api/campaigns/{id}`, gRPC (`/campaign.v1/CreateCampaign`, `/campaign.v1/GetCampaign`).
+    - **Tech**: NestJS, Rust/Wasm (Shopify Functions), PostgreSQL (`campaigns: JSONB`), Redis Cluster (`campaign:{campaign_id}`).
+    - **Interactions**: Creates/applies campaign discounts and publishes `campaign_created` to Kafka.
+11. **Gamification Service**:
     - **Purpose**: Manages badge awards and leaderboards (Phase 6).
     - **Endpoints**: `/api/gamification/badges`, `/api/gamification/leaderboard`, gRPC (`/gamification.v1/AwardBadge`, `/gamification.v1/GetLeaderboard`).
     - **Tech**: NestJS, PostgreSQL (`customer_badges`, `leaderboard_rankings`), Redis Cluster (`badge:{customer_id}:{badge_id}`, `leaderboard:{merchant_id}:{page}`).
     - **Interactions**: Awards badges, ranks customers, caches data in Redis, and publishes `badge_awarded` to Kafka.
-11. **Frontend Service**:
+12. **Frontend Service**:
     - **Purpose**: Hosts the merchant dashboard, customer widget, and admin module as a single-page app, ensuring Shopify compliance and accessibility.
     - **Endpoints**: `/`, `/customer`, `/admin`, WebSocket (`/admin/v1/setup/stream`).
     - **Tech**: Vite + React, Polaris, Tailwind CSS, App Bridge, `i18next` (multilingual with RTL for Arabic and Hebrew, fallback: English).
-    - **Interactions**: Communicates with Core, Auth, Points, Referrals, RFM Analytics, and AdminFeatures via REST and WebSocket for real-time updates (e.g., onboarding progress, referral status).
-12. **Products Service**:
+    - **Interactions**: Communicates with API Gateway, Core, Auth, Points, Referrals, RFM Analytics, and AdminFeatures via REST and WebSocket for real-time updates (e.g., onboarding progress, referral status).
+13. **Products Service**:
     - **Purpose**: Manages product-related data, including product-level RFM analytics (Phase 6), campaign eligibility, and integration with Shopify Product API for dynamic discounts.
     - **Endpoints**: `/v1/api/products`, `/v1/api/products/rfm`, `/v1/api/products/campaigns`, gRPC (`/products.v1/GetProductRFM`, `/products.v1/ApplyCampaign`).
     - **Tech**: NestJS, PostgreSQL (`products`, `product_rfm_scores`), Redis Cluster (`product:{product_id}:rfm`), Shopify Product API.
@@ -88,7 +93,7 @@ The system comprises twelve microservices, each built with NestJS (TypeScript) a
   - Encryption: PII (`customers.email`, `rfm_score`) with AES-256 via `pgcrypto`, quarterly key rotation via AWS KMS.
   - Refresh: Incremental refresh for `rfm_segment_counts` via `rfm_segment_deltas` (daily, `0 1 * * *`) and real-time on `orders/create`.
 - **Redis Cluster**:
-  - Caches: Points balances (`points:customer:{id}`), referral codes (`referral:{code}`), rate limits (`shopify_api_rate_limit:{merchant_id}`), notification templates, RFM previews (`rfm:preview:{merchant_id}`), badges, leaderboards, setup tasks, SLO metrics, product RFM scores (`product:{product_id}:rfm`).
+  - Caches: Points balances (`points:customer:{id}`), referral codes (`referral:{code}`), rate limits (`shopify_api_rate_limit:{merchant_id}`), notification templates, RFM previews (`rfm:preview:{merchant_id}`), badges, leaderboards, setup tasks, SLO metrics, product RFM scores (`product:{product_id}:rfm`), API Gateway rate limits (`api_rate_limit:{merchant_id}`).
   - Streams: Real-time logs (`logs:{merchant_id}`), queue monitoring, RFM caching.
   - Dead-letter queue for GDPR webhook retries (3 retries).
 - **Backblaze B2**:
@@ -141,38 +146,38 @@ The system comprises twelve microservices, each built with NestJS (TypeScript) a
 | Shopify Flow Templates          | Should Have  | 4–5       | Medium (automation adoption)           | Medium         |
 
 ## 4. Data Flow
-1. **Merchant Authentication**: Merchant logs in via Shopify OAuth, Auth Service issues JWT, Core Service enforces plan limits.
-2. **Points and Rewards**: `orders/create` triggers Points Service, Products Service checks campaign eligibility, streams updates.
-3. **Referrals**: Referrals Service generates links, sends notifications, tracks status.
-4. **RFM Analytics**: RFM Analytics Service calculates scores, Products Service adds product-level insights.
-5. **GDPR Compliance**: AdminCore Service handles GDPR webhooks, encrypts PII.
-6. **Admin Operations**: AdminFeatures Service manages imports, templates, and Square sync, Frontend Service displays updates.
+1. **Merchant Authentication**: Merchant logs in via Shopify OAuth, API Gateway routes to Auth Service, which issues JWT, Core Service enforces plan limits.
+2. **Points and Rewards**: `orders/create` triggers Points Service via API Gateway, Products Service checks campaign eligibility, streams updates.
+3. **Referrals**: Referrals Service generates links via API Gateway, sends notifications, tracks status.
+4. **RFM Analytics**: RFM Analytics Service calculates scores via API Gateway, Products Service adds product-level insights.
+5. **GDPR Compliance**: AdminCore Service handles GDPR webhooks via API Gateway, encrypts PII.
+6. **Admin Operations**: AdminFeatures Service manages imports, templates, and Square sync via API Gateway, Frontend Service displays updates.
 
 ## 5. API Endpoints
-- **GET /api/customer/points**: Retrieves points balance and RFM score (Points Service).
-- **POST /api/redeem**: Redeems points for rewards or discounts (Points Service).
-- **POST /api/settings**: Updates program settings (Core Service).
-- **POST /api/rewards**: Adds a new reward (Points Service).
-- **POST /api/referral**: Creates a referral link (Referrals Service).
-- **GET /api/referral/status**: Retrieves referral status (Referrals Service).
-- **POST /api/gdpr/request**: Submits GDPR request (AdminCore Service).
-- **POST /api/notifications/template**: Configures templates (AdminFeatures Service).
-- **POST /api/customers/import**: Imports customers (AdminFeatures Service).
-- **GET /api/rate-limits**: Monitors rate limits (AdminFeatures Service).
-- **GET /api/admin/analytics**: Retrieves analytics (RFM Analytics Service).
-- **GET /api/nudges**: Retrieves RFM nudges (RFM Analytics Service).
-- **POST /api/admin/replay**: Replays actions (AdminFeatures Service).
-- **POST /api/admin/rfm/simulate**: Simulates RFM transitions (AdminFeatures Service).
-- **POST /api/admin/square/sync**: Syncs Square POS (AdminFeatures Service).
-- **GET /api/products**: Retrieves product data (Products Service).
-- **GET /api/products/rfm**: Gets product-level RFM (Products Service).
+- **GET /api/customer/points**: Retrieves points balance and RFM score (API Gateway → Points Service).
+- **POST /api/redeem**: Redeems points for rewards or discounts (API Gateway → Points Service).
+- **POST /api/settings**: Updates program settings (API Gateway → Core Service).
+- **POST /api/rewards**: Adds a new reward (API Gateway → Points Service).
+- **POST /api/referral**: Creates a referral link (API Gateway → Referrals Service).
+- **GET /api/referral/status**: Retrieves referral status (API Gateway → Referrals Service).
+- **POST /api/gdpr/request**: Submits GDPR request (API Gateway → AdminCore Service).
+- **POST /api/notifications/template**: Configures templates (API Gateway → AdminFeatures Service).
+- **POST /api/customers/import**: Imports customers (API Gateway → AdminFeatures Service).
+- **GET /api/rate-limits**: Monitors rate limits (API Gateway → AdminFeatures Service).
+- **GET /api/admin/analytics**: Retrieves analytics (API Gateway → RFM Analytics Service).
+- **GET /api/nudges**: Retrieves RFM nudges (API Gateway → RFM Analytics Service).
+- **POST /api/admin/replay**: Replays actions (API Gateway → AdminFeatures Service).
+- **POST /api/admin/rfm/simulate**: Simulates RFM transitions (API Gateway → AdminFeatures Service).
+- **POST /api/admin/square/sync**: Syncs Square POS (API Gateway → AdminFeatures Service).
+- **GET /api/products**: Retrieves product data (API Gateway → Products Service).
+- **GET /api/products/rfm**: Gets product-level RFM (API Gateway → Products Service).
 
 ## 6. Webhooks
-- **orders/create**: Awards points (Points Service).
-- **orders/cancelled**: Adjusts points (Points Service).
-- **customers/data_request**: Handles GDPR requests (AdminCore Service).
-- **customers/redact**: Handles redaction (AdminCore Service).
-- **pos/offline_sync**: Syncs POS transactions (Points Service).
+- **orders/create**: Awards points (API Gateway → Points Service).
+- **orders/cancelled**: Adjusts points (API Gateway → Points Service).
+- **customers/data_request**: Handles GDPR requests (API Gateway → AdminCore Service).
+- **customers/redact**: Handles redaction (API Gateway → AdminCore Service).
+- **pos/offline_sync**: Syncs POS transactions (API Gateway → Points Service).
 
 ## 7. Notifications
 - **Klaviyo/Postscript**: Triggers for points, referrals, GDPR, with AWS SES fallback.
@@ -187,7 +192,7 @@ The system comprises twelve microservices, each built with NestJS (TypeScript) a
 - **Merchant Dashboard**: `SettingsPage`, `NotificationTemplatePage`, `RateLimitPage`, `CustomerImportPage`, `ActionReplayPage`, `RFMSimulationPage`, `SquareSyncPage` (Frontend Service).
 
 ## 10. Deployment
-- **Docker Compose**: Configures Core, Auth, Points, Referrals, RFM Analytics, Event Tracking, AdminCore, AdminFeatures, Campaign, Gamification, Frontend, Products, db, redis, nginx services.
+- **Docker Compose**: Configures API Gateway, Core, Auth, Points, Referrals, RFM Analytics, Event Tracking, AdminCore, AdminFeatures, Campaign, Gamification, Frontend, Products, db, redis, nginx services.
 - **Kubernetes**: Horizontal Pod Autoscaling for Plus merchants.
 
 ## 11. Security
@@ -196,7 +201,7 @@ The system comprises twelve microservices, each built with NestJS (TypeScript) a
 - **GDPR/CCPA**: Webhook handlers with retries, 90-day retention.
 
 ## 12. Testing
-- **Unit Tests**: Jest for Core, Points, Products services.
+- **Unit Tests**: Jest for API Gateway, Core, Points, Products services.
 - **E2E Tests**: Cypress for Frontend Service.
 - **Performance Tests**: k6 for load testing.
 - **Accessibility**: Lighthouse CI (90+ scores).
@@ -229,10 +234,5 @@ The system comprises twelve microservices, each built with NestJS (TypeScript) a
 4. **Commit Changes**:
    ```powershell
    git add system_architecture_and_specifications.md
-   git commit -m "Update system architecture and specifications with Core, Frontend, and Products microservices"
+   git commit -m "Add API Gateway microservice to system architecture and specifications"
    ```
-
-### Final Answer
-The updated `system_architecture_and_specifications.md` now includes the `core-service`, `frontend`, and `products-service` microservices, aligning with the current architecture and TVP timeline as of 09:02 PM JST on July 22, 2025. Apply the changes, test the integration, and commit the updates.
-
-Let me know if further refinements are needed!
