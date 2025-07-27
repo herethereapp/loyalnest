@@ -1,0 +1,85 @@
+- React + Vite + Tailwind CSS  
+- State management (useState, useEffect, Context)  
+- ESLint + Prettier for code standards  
+- Docker / Docker Compose for containerization  
+- Swagger for API documentation, Postman for debugging  
+- GitHub Actions for CI/CD pipelines  
+- Automated testing with Jest (unit tests) and Playwright (end-to-end tests)  
+- Shopify Platform Intro
+    - Merchant & client workflows
+    - App types
+    - API permissions
+    - Read Shopify docs
+    - Register developer account
+    - Create test store
+- Shopify Admin App Development
+    - OAuth 2.0
+    - App Bridge
+    - Polaris component library
+- Shopify Embedded App Integration
+    - iframe embedding
+    - Shopify App Bridge V3 API
+    - Integrate customer-facing page
+- Shopify Functions
+    - Rust function development
+    - Bundle packaging
+    - API extensions
+- Shopify Billing System
+    - Subscription billing
+    - One-time billing
+    - GraphQL Mutation
+- Shopify App Review & Launch
+    - App Checklist
+    - Sensitive data review
+    - Store listing
+- NestJS framework (Controller, Service, Module)  
+- PostgreSQL + Prisma/SQLx operations  
+- Redis: caching, queues, publish-subscribe  
+- Kafka for event-driven communication (microservices)  
+- Rust basics + backend logic (for Shopify Functions)  
+- User authentication (JWT), multi-tenant design, RBAC permissions  
+- Write unit tests (Jest) and integration tests for all modules  
+- VIP Tiers System
+    - Tier strategy design
+    - Segmented permissions
+    - Data persistence
+- Multi-Store Points Sharing
+    - Multi-tenant architecture
+    - Shopify Plus multi-store API
+    - Unified identity
+- Product-Level RFM
+    - Product data aggregation
+    - Scoring cache
+    - Redis optimization
+- Gamification
+    - Leaderboard caching
+    - Redis sorting
+    - Rules engine
+- Scalability
+    - Load balancing (AWS ELB)
+    - Database indexing
+    - Caching strategies
+- Serverless
+    - AWS Lambda
+    - Vercel Functions for serverless deployment
+- AI Analytics
+    - Basic ML models (TensorFlow.js) for predictive segmentation
+- Gray Releases
+    - Nginx routing
+    - Weight-based traffic splitting
+    - Configure Nginx for gray releases + monitor with logs
+- GDPR Auto-Cleanup
+    - Audit logs
+    - PII deletion
+    - Webhook retry mechanism (Build gdpr_cleanup_worker script, test retry logic)
+- Disaster Recovery
+    - pg_dump
+    - Redis snapshots
+    - RTO drills
+    - Simulate crash recovery
+    - Write recovery report
+- A/B Testing
+    - User story mapping
+    - A/B testing
+    - Feedback analysis
+

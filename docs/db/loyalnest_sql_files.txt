@@ -1,0 +1,763 @@
+<!-- Core Service SQL -->
+<xaiFile name="core.sql" contentType="text/sql">
+-- core.sql: Schema for Core Service
+-- Tables: program_settings, customer_import_logs
+-- Indexes, functions for settings management
+-- Enables pgcrypto for encryption
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Table: program_settings
+CREATE TABLE IF NOT EXISTS program_settings (
+    merchant_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    settings JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_program_settings_merchant_id ON program_settings (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_program_settings_created_at ON program_settings (created_at);
+
+-- Table: customer_import_logs
+CREATE TABLE IF NOT EXISTS customer_import_logs (
+    import_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL REFERENCES program_settings(merchant_id) ON DELETE CASCADE,
+    status VARCHAR(20) CHECK (status IN ('pending', 'completed', 'failed')),
+    log_details JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_customer_import_logs_merchant_id ON customer_import_logs (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_customer_import_logs_created_at ON customer_import_logs (created_at);
+
+-- Function: Update settings with encryption for sensitive fields
+CREATE OR REPLACE FUNCTION update_settings(
+    p_merchant_id UUID,
+    p_settings JSONB,
+    p_encryption_key TEXT
+) RETURNS VOID AS $$
+BEGIN
+    UPDATE program_settings
+    SET settings = jsonb_set(
+        settings,
+        '{sensitive}',
+        pgp_sym_encrypt(p_settings->>'sensitive'::TEXT, p_encryption_key)::JSONB
+    ),
+    updated_at = CURRENT_TIMESTAMP
+    WHERE merchant_id = p_merchant_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger: Update updated_at
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_timestamp
+BEFORE UPDATE ON program_settings
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+</xaiFile>
+
+<!-- Auth Service SQL -->
+<xaiFile name="auth.sql" contentType="text/sql">
+-- auth.sql: Schema for Auth Service
+-- Tables: merchants, admin_users, admin_sessions, impersonation_sessions
+-- Indexes, functions for JWT and PII encryption
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Table: merchants
+CREATE TABLE IF NOT EXISTS merchants (
+    merchant_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    shop_domain VARCHAR(255) NOT NULL UNIQUE,
+    access_token TEXT NOT NULL, -- AES-256 encrypted
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_merchants_shop_domain ON merchants (shop_domain);
+CREATE INDEX IF NOT EXISTS idx_merchants_created_at ON merchants (created_at);
+
+-- Table: admin_users
+CREATE TABLE IF NOT EXISTS admin_users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email TEXT NOT NULL, -- AES-256 encrypted
+    merchant_id UUID NOT NULL REFERENCES merchants(merchant_id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_admin_users_email ON admin_users USING hash (email);
+CREATE INDEX IF NOT EXISTS idx_admin_users_merchant_id ON admin_users (merchant_id);
+
+-- Table: admin_sessions
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES admin_users(user_id) ON DELETE CASCADE,
+    jwt_token TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_user_id ON admin_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions (expires_at);
+
+-- Table: impersonation_sessions
+CREATE TABLE IF NOT EXISTS impersonation_sessions (
+    session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    admin_id UUID NOT NULL REFERENCES admin_users(user_id) ON DELETE CASCADE,
+    merchant_id UUID NOT NULL REFERENCES merchants(merchant_id) ON DELETE CASCADE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_admin_id ON impersonation_sessions (admin_id);
+CREATE INDEX IF NOT EXISTS idx_impersonation_sessions_merchant_id ON impersonation_sessions (merchant_id);
+
+-- Function: Encrypt email and access token
+CREATE OR REPLACE FUNCTION encrypt_pii(
+    p_email TEXT,
+    p_access_token TEXT,
+    p_encryption_key TEXT
+) RETURNS RECORD AS $$
+DECLARE
+    encrypted_email TEXT;
+    encrypted_token TEXT;
+BEGIN
+    encrypted_email := pgp_sym_encrypt(p_email, p_encryption_key);
+    encrypted_token := pgp_sym_encrypt(p_access_token, p_encryption_key);
+    RETURN (encrypted_email, encrypted_token)::RECORD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function: Decrypt PII
+CREATE OR REPLACE FUNCTION decrypt_pii(
+    p_encrypted_text TEXT,
+    p_encryption_key TEXT
+) RETURNS TEXT AS $$
+BEGIN
+    RETURN pgp_sym_decrypt(p_encrypted_text::BYTEA, p_encryption_key);
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
+
+<!-- Referrals Service SQL -->
+<xaiFile name="referrals.sql" contentType="text/sql">
+-- referrals.sql: Schema for Referrals Service
+-- Table: referrals with range partitioning
+-- Indexes, triggers for status updates
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Parent Table: referrals
+CREATE TABLE IF NOT EXISTS referrals (
+    referral_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    referrer_id UUID NOT NULL,
+    referral_link_id UUID NOT NULL,
+    status VARCHAR(20) CHECK (status IN ('pending', 'completed', 'expired')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY RANGE (created_at);
+
+-- Partitions (example for 2025)
+CREATE TABLE referrals_2025 PARTITION OF referrals
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_referrals_merchant_id ON referrals (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON referrals (referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_referral_link_id ON referrals (referral_link_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_created_at ON referrals (created_at);
+
+-- Trigger: Update updated_at
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_timestamp
+BEFORE UPDATE ON referrals
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+-- Function: Update referral status
+CREATE OR REPLACE FUNCTION update_referral_status(
+    p_referral_id UUID,
+    p_status VARCHAR
+) RETURNS VOID AS $$
+BEGIN
+    UPDATE referrals
+    SET status = p_status,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE referral_id = p_referral_id;
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
+
+<!-- Users Service SQL -->
+<xaiFile name="users.sql" contentType="text/sql">
+-- users.sql: Schema for Users Service
+-- Tables: users, audit_logs with range partitioning
+-- Indexes, triggers for audit logging, functions for PII encryption
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Table: users
+CREATE TABLE IF NOT EXISTS users (
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email TEXT NOT NULL, -- AES-256 encrypted
+    merchant_id UUID NOT NULL,
+    role_id UUID,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users USING hash (email);
+CREATE INDEX IF NOT EXISTS idx_users_merchant_id ON users (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_users_role_id ON users (role_id);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users (created_at);
+
+-- Parent Table: audit_logs
+CREATE TABLE IF NOT EXISTS audit_logs (
+    log_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    user_id UUID,
+    action VARCHAR(20) CHECK (action IN ('create', 'update', 'delete')),
+    details JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY RANGE (created_at);
+
+-- Partitions (example for 2025)
+CREATE TABLE audit_logs_2025 PARTITION OF audit_logs
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_audit_logs_merchant_id ON audit_logs (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
+
+-- Function: Log user changes
+CREATE OR REPLACE FUNCTION log_user_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO audit_logs (merchant_id, user_id, action, details, created_at)
+    VALUES (
+        NEW.merchant_id,
+        NEW.user_id,
+        CASE WHEN TG_OP = 'INSERT' THEN 'create'
+             WHEN TG_OP = 'UPDATE' THEN 'update'
+             WHEN TG_OP = 'DELETE' THEN 'delete' END,
+        row_to_json(NEW)::JSONB,
+        CURRENT_TIMESTAMP
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger: Audit user changes
+CREATE TRIGGER trigger_log_user_change
+AFTER INSERT OR UPDATE OR DELETE ON users
+FOR EACH ROW
+EXECUTE FUNCTION log_user_change();
+
+-- Function: Encrypt user email
+CREATE OR REPLACE FUNCTION encrypt_user_email(
+    p_user_id UUID,
+    p_email TEXT,
+    p_encryption_key TEXT
+) RETURNS VOID AS $$
+BEGIN
+    UPDATE users
+    SET email = pgp_sym_encrypt(p_email, p_encryption_key)
+    WHERE user_id = p_user_id;
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
+
+<!-- Roles Service SQL -->
+<xaiFile name="roles.sql" contentType="text/sql">
+-- roles.sql: Schema for Roles Service
+-- Tables: roles, audit_logs (shared)
+-- Indexes, triggers for audit logging
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Table: roles
+CREATE TABLE IF NOT EXISTS roles (
+    role_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    permissions JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_roles_merchant_id ON roles (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_roles_created_at ON roles (created_at);
+
+-- Trigger: Log role changes (uses shared audit_logs from users.sql)
+CREATE OR REPLACE FUNCTION log_role_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO audit_logs (merchant_id, user_id, action, details, created_at)
+    VALUES (
+        NEW.merchant_id,
+        NULL,
+        CASE WHEN TG_OP = 'INSERT' THEN 'create'
+             WHEN TG_OP = 'UPDATE' THEN 'update'
+             WHEN TG_OP = 'DELETE' THEN 'delete' END,
+        row_to_json(NEW)::JSONB,
+        CURRENT_TIMESTAMP
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_log_role_change
+AFTER INSERT OR UPDATE OR DELETE ON roles
+FOR EACH ROW
+EXECUTE FUNCTION log_role_change();
+
+-- Trigger: Update updated_at
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_timestamp
+BEFORE UPDATE ON roles
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+</xaiFile>
+
+<!-- RFM Service SQL -->
+<xaiFile name="rfm.sql" contentType="text/sql">
+-- rfm.sql: Schema for RFM Service (TimescaleDB)
+-- Tables: rfm_segment_deltas, rfm_segment_counts, rfm_score_history, customer_segments
+-- Hypertables, materialized views, triggers for RFM updates
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+-- Table: rfm_segment_deltas (Hypertable)
+CREATE TABLE IF NOT EXISTS rfm_segment_deltas (
+    customer_id UUID NOT NULL,
+    merchant_id UUID NOT NULL,
+    recency NUMERIC NOT NULL,
+    frequency NUMERIC NOT NULL,
+    monetary NUMERIC NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+SELECT create_hypertable('rfm_segment_deltas', 'created_at', chunk_time_interval => INTERVAL '1 month');
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_rfm_segment_deltas_customer_id ON rfm_segment_deltas (customer_id);
+CREATE INDEX IF NOT EXISTS idx_rfm_segment_deltas_merchant_id ON rfm_segment_deltas (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_rfm_segment_deltas_created_at ON rfm_segment_deltas (created_at);
+
+-- Table: rfm_score_history
+CREATE TABLE IF NOT EXISTS rfm_score_history (
+    history_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id UUID NOT NULL,
+    merchant_id UUID NOT NULL,
+    rfm_score JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_rfm_score_history_customer_id ON rfm_score_history (customer_id);
+CREATE INDEX IF NOT EXISTS idx_rfm_score_history_merchant_id ON rfm_score_history (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_rfm_score_history_created_at ON rfm_score_history (created_at);
+
+-- Table: customer_segments
+CREATE TABLE IF NOT EXISTS customer_segments (
+    customer_id UUID NOT NULL,
+    merchant_id UUID NOT NULL,
+    segment VARCHAR(20) CHECK (segment IN ('high_value', 'at_risk', 'new')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (customer_id, merchant_id)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_customer_segments_merchant_id ON customer_segments (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_customer_segments_created_at ON customer_segments (created_at);
+
+-- Materialized View: rfm_segment_counts
+CREATE MATERIALIZED VIEW IF NOT EXISTS rfm_segment_counts
+WITH (timescaledb.continuous) AS
+SELECT
+    merchant_id,
+    segment,
+    COUNT(*) AS count,
+    time_bucket('1 day', created_at) AS created_at
+FROM customer_segments
+GROUP BY merchant_id, segment, time_bucket('1 day', created_at)
+WITH DATA;
+
+-- Indexes on materialized view
+CREATE INDEX IF NOT EXISTS idx_rfm_segment_counts_merchant_id ON rfm_segment_counts (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_rfm_segment_counts_created_at ON rfm_segment_counts (created_at);
+
+-- Function: Update RFM segment
+CREATE OR REPLACE FUNCTION update_rfm_segment(
+    p_customer_id UUID,
+    p_merchant_id UUID,
+    p_recency NUMERIC,
+    p_frequency NUMERIC,
+    p_monetary NUMERIC
+) RETURNS VOID AS $$
+DECLARE
+    v_segment VARCHAR(20);
+BEGIN
+    -- Calculate segment based on thresholds
+    v_segment := CASE
+        WHEN p_recency > 80 AND p_frequency > 5 THEN 'high_value'
+        WHEN p_recency < 30 THEN 'at_risk'
+        ELSE 'new'
+    END;
+
+    -- Insert into rfm_segment_deltas
+    INSERT INTO rfm_segment_deltas (customer_id, merchant_id, recency, frequency, monetary, created_at)
+    VALUES (p_customer_id, p_merchant_id, p_recency, p_frequency, p_monetary, CURRENT_TIMESTAMP);
+
+    -- Update customer_segments
+    INSERT INTO customer_segments (customer_id, merchant_id, segment, created_at)
+    VALUES (p_customer_id, p_merchant_id, v_segment, CURRENT_TIMESTAMP)
+    ON CONFLICT (customer_id, merchant_id)
+    DO UPDATE SET segment = v_segment, created_at = CURRENT_TIMESTAMP;
+
+    -- Log score history
+    INSERT INTO rfm_score_history (customer_id, merchant_id, rfm_score, created_at)
+    VALUES (p_customer_id, p_merchant_id, jsonb_build_object('recency', p_recency, 'frequency', p_frequency, 'monetary', p_monetary), CURRENT_TIMESTAMP);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger: Update segment on order events
+CREATE OR REPLACE FUNCTION trigger_update_rfm()
+RETURNS TRIGGER AS $$
+BEGIN
+    PERFORM update_rfm_segment(NEW.customer_id, NEW.merchant_id, NEW.recency, NEW.frequency, NEW.monetary);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_rfm_update
+AFTER INSERT ON rfm_segment_deltas
+FOR EACH ROW
+EXECUTE FUNCTION trigger_update_rfm();
+</xaiFile>
+
+<!-- Event Tracking Service SQL -->
+<xaiFile name="event_tracking.sql" contentType="text/sql">
+-- event_tracking.sql: Schema for Event Tracking Service
+-- Table: queue_tasks
+-- Indexes for task processing
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Table: queue_tasks
+CREATE TABLE IF NOT EXISTS queue_tasks (
+    task_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    status VARCHAR(20) CHECK (status IN ('pending', 'completed', 'failed')),
+    payload JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_queue_tasks_merchant_id ON queue_tasks (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_queue_tasks_event_type ON queue_tasks (event_type);
+CREATE INDEX IF NOT EXISTS idx_queue_tasks_created_at ON queue_tasks (created_at);
+
+-- Function: Process task
+CREATE OR REPLACE FUNCTION process_task(
+    p_task_id UUID,
+    p_status VARCHAR
+) RETURNS VOID AS $$
+BEGIN
+    UPDATE queue_tasks
+    SET status = p_status,
+        payload = jsonb_set(payload, '{processed_at}', to_jsonb(CURRENT_TIMESTAMP))
+    WHERE task_id = p_task_id;
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
+
+<!-- AdminCore Service SQL -->
+<xaiFile name="admin_core.sql" contentType="text/sql">
+-- admin_core.sql: Schema for AdminCore Service
+-- Tables: gdpr_requests, audit_logs (shared), webhook_idempotency_keys
+-- Indexes, functions for GDPR handling
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Table: gdpr_requests
+CREATE TABLE IF NOT EXISTS gdpr_requests (
+    request_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    user_id UUID,
+    status VARCHAR(20) CHECK (status IN ('pending', 'completed')),
+    retention_expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_gdpr_requests_merchant_id ON gdpr_requests (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_gdpr_requests_user_id ON gdpr_requests (user_id);
+CREATE INDEX IF NOT EXISTS idx_gdpr_requests_retention_expires_at ON gdpr_requests (retention_expires_at);
+
+-- Table: webhook_idempotency_keys
+CREATE TABLE IF NOT EXISTS webhook_idempotency_keys (
+    key_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    webhook_id UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_webhook_idempotency_keys_merchant_id ON webhook_idempotency_keys (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_idempotency_keys_webhook_id ON webhook_idempotency_keys (webhook_id);
+
+-- Function: Process GDPR request
+CREATE OR REPLACE FUNCTION process_gdpr_request(
+    p_request_id UUID,
+    p_status VARCHAR
+) RETURNS VOID AS $$
+BEGIN
+    UPDATE gdpr_requests
+    SET status = p_status,
+        retention_expires_at = CURRENT_TIMESTAMP + INTERVAL '90 days'
+    WHERE request_id = p_request_id;
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
+
+<!-- AdminFeatures Service SQL -->
+<xaiFile name="admin_features.sql" contentType="text/sql">
+-- admin_features.sql: Schema for AdminFeatures Service
+-- Tables: email_templates, integrations, setup_tasks, merchant_settings
+-- Indexes, functions for template and integration management
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Table: email_templates
+CREATE TABLE IF NOT EXISTS email_templates (
+    template_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    template_data JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_email_templates_merchant_id ON email_templates (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_email_templates_created_at ON email_templates (created_at);
+
+-- Table: integrations
+CREATE TABLE IF NOT EXISTS integrations (
+    integration_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    credentials TEXT NOT NULL, -- AES-256 encrypted
+    type VARCHAR(50) CHECK (type IN ('shopify', 'square', 'klaviyo')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_integrations_merchant_id ON integrations (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_integrations_type ON integrations (type);
+
+-- Table: setup_tasks
+CREATE TABLE IF NOT EXISTS setup_tasks (
+    task_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    status VARCHAR(20) CHECK (status IN ('pending', 'completed')),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_setup_tasks_merchant_id ON setup_tasks (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_setup_tasks_created_at ON setup_tasks (created_at);
+
+-- Table: merchant_settings
+CREATE TABLE IF NOT EXISTS merchant_settings (
+    merchant_id UUID PRIMARY KEY,
+    currency VARCHAR(10) NOT NULL,
+    settings JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_merchant_settings_merchant_id ON merchant_settings (merchant_id);
+
+-- Function: Encrypt integration credentials
+CREATE OR REPLACE FUNCTION encrypt_integration_credentials(
+    p_integration_id UUID,
+    p_credentials TEXT,
+    p_encryption_key TEXT
+) RETURNS VOID AS $$
+BEGIN
+    UPDATE integrations
+    SET credentials = pgp_sym_encrypt(p_credentials, p_encryption_key)
+    WHERE integration_id = p_integration_id;
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
+
+<!-- Campaign Service SQL -->
+<xaiFile name="campaign.sql" contentType="text/sql">
+-- campaign.sql: Schema for Campaign Service
+-- Table: campaigns
+-- Indexes for campaign management
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Table: campaigns
+CREATE TABLE IF NOT EXISTS campaigns (
+    campaign_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    details JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_campaigns_merchant_id ON campaigns (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_created_at ON campaigns (created_at);
+
+-- Trigger: Update updated_at
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_timestamp
+BEFORE UPDATE ON campaigns
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+</xaiFile>
+
+<!-- Gamification Service SQL -->
+<xaiFile name="gamification.sql" contentType="text/sql">
+-- gamification.sql: Schema for Gamification Service
+-- Tables: customer_badges, leaderboard_rankings
+-- Indexes for badge and leaderboard queries
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Table: customer_badges
+CREATE TABLE IF NOT EXISTS customer_badges (
+    badge_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id UUID NOT NULL,
+    merchant_id UUID NOT NULL,
+    badge_type VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_customer_badges_customer_id ON customer_badges (customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_badges_merchant_id ON customer_badges (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_customer_badges_created_at ON customer_badges (created_at);
+
+-- Table: leaderboard_rankings
+CREATE TABLE IF NOT EXISTS leaderboard_rankings (
+    ranking_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    customer_id UUID NOT NULL,
+    merchant_id UUID NOT NULL,
+    score NUMERIC NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_leaderboard_rankings_customer_id ON leaderboard_rankings (customer_id);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_rankings_merchant_id ON leaderboard_rankings (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_rankings_score ON leaderboard_rankings (score);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_rankings_created_at ON leaderboard_rankings (created_at);
+
+-- Function: Update leaderboard score
+CREATE OR REPLACE FUNCTION update_leaderboard_score(
+    p_customer_id UUID,
+    p_merchant_id UUID,
+    p_score NUMERIC
+) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO leaderboard_rankings (customer_id, merchant_id, score, created_at)
+    VALUES (p_customer_id, p_merchant_id, p_score, CURRENT_TIMESTAMP)
+    ON CONFLICT (customer_id, merchant_id)
+    DO UPDATE SET score = p_score, created_at = CURRENT_TIMESTAMP;
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
+
+<!-- Products Service SQL -->
+<xaiFile name="products.sql" contentType="text/sql">
+-- products.sql: Schema for Products Service
+-- Tables: products, product_rfm_scores
+-- Indexes for product and RFM queries
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Table: products
+CREATE TABLE IF NOT EXISTS products (
+    product_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    merchant_id UUID NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_products_merchant_id ON products (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_products_created_at ON products (created_at);
+
+-- Table: product_rfm_scores
+CREATE TABLE IF NOT EXISTS product_rfm_scores (
+    score_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
+    merchant_id UUID NOT NULL,
+    rfm_score JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_product_rfm_scores_product_id ON product_rfm_scores (product_id);
+CREATE INDEX IF NOT EXISTS idx_product_rfm_scores_merchant_id ON product_rfm_scores (merchant_id);
+CREATE INDEX IF NOT EXISTS idx_product_rfm_scores_created_at ON product_rfm_scores (created_at);
+
+-- Function: Update product RFM score
+CREATE OR REPLACE FUNCTION update_product_rfm_score(
+    p_product_id UUID,
+    p_merchant_id UUID,
+    p_rfm_score JSONB
+) RETURNS VOID AS $$
+BEGIN
+    INSERT INTO product_rfm_scores (product_id, merchant_id, rfm_score, created_at)
+    VALUES (p_product_id, p_merchant_id, p_rfm_score, CURRENT_TIMESTAMP)
+    ON CONFLICT (product_id, merchant_id)
+    DO UPDATE SET rfm_score = p_rfm_score, created_at = CURRENT_TIMESTAMP;
+END;
+$$ LANGUAGE plpgsql;
+</xaiFile>
