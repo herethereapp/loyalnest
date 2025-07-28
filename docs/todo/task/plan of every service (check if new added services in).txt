@@ -1,0 +1,899 @@
+
+
+what about to include inter-service communication in each plan
+
+
+To enhance the service plans for LoyalNest’s Phase 3 microservices architecture (October 2025–February 2026), I’ll update the template and the individual plans for all 13 services (API Gateway, Core, Auth, Points, Referrals, RFM Analytics, Event Tracking, AdminCore, AdminFeatures, Campaign, Gamification, Frontend, Products) to include a dedicated Inter-Service Communication section. This section will detail how each service interacts with others via gRPC, REST, or Kafka, specifying protocols, endpoints, events, and dependencies. The plans will align with your requirements for scalability (10,000 orders/hour), GDPR/CCPA compliance, and the TVP deadline (February 2026), while considering your solo developer context, Nx monorepo, and VPS deployment (Ubuntu, Docker Compose, 32GB RAM, 8 vCPUs). The updated template and plans build on the previous response, ensuring consistency and completeness.
+
+Updated Service Plan Template
+The revised template includes an Inter-Service Communication section to clarify how services interact, covering synchronous (gRPC/REST) and asynchronous (Kafka) communication.
+
+text
+
+Collapse
+
+Wrap
+
+Copy
+# [Service Name] Plan
+
+## Overview
+- **Purpose**: [Brief description of the service’s role in LoyalNest, e.g., managing customer data.]
+- **Priority for TVP**: [High/Medium/Low, based on TVP requirements.]
+- **Dependencies**: [Services, libraries, or external APIs, e.g., Core depends on Auth.]
+
+## Database Setup
+- **Database Type**: [e.g., PostgreSQL, MongoDB, Redis.]
+- **Tables/Collections**: [List tables/collections, e.g., `customers`.]
+- **Schema Details**: [Key fields, indexes, triggers, e.g., `email` (encrypted).]
+- **GDPR/CCPA Compliance**: [How PII is handled, e.g., encryption, audit logs.]
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**: [Endpoints called or exposed, e.g., `/core.v1/GetCustomerRFM`, with input/output and target service.]
+  - **REST**: [Endpoints for external APIs or webhooks, e.g., `/webhooks/orders/create`.]
+- **Asynchronous Communication**:
+  - **Events Produced**: [Kafka events emitted, e.g., `customer.created`, with consumers and purpose.]
+  - **Events Consumed**: [Kafka events subscribed to, e.g., `rfm.updated`, with actions.]
+- **Saga Patterns**: [Cross-service workflows, e.g., Points → RFM Analytics → Core.]
+
+## Key Endpoints
+- **gRPC/REST**: [List endpoints, e.g., `/core.v1/GetCustomerRFM`, with purpose.]
+- **Access Patterns**: [Read/write frequency, e.g., high-read for `referrals`.]
+- **Rate Limits**: [Shopify API limits or internal limits.]
+
+## Testing Strategy
+- **Unit Tests**: [Jest tests for repository/service, e.g., `CoreRepository.findById`.]
+- **E2E Tests**: [Cypress tests for endpoints, e.g., `/points.v1/GetPointsBalance`.]
+- **Load Tests**: [k6 tests for throughput, e.g., 10,000 orders/hour.]
+- **Compliance Tests**: [Tests for GDPR/CCPA, e.g., PII encryption.]
+
+## Deployment
+- **Docker Compose**: [Service configuration, e.g., PostgreSQL port.]
+- **Environment Variables**: [e.g., `CORE_DB_HOST`, `KAFKA_BROKER`.]
+- **Scaling Considerations**: [e.g., MongoDB sharding.]
+
+## Risks and Mitigations
+- **Risks**: [e.g., high write latency, Kafka lag.]
+- **Mitigations**: [e.g., indexes, Kafka retries.]
+
+## Action Items
+- [ ] [Task, e.g., Define `Customer.entity.ts` by [date].]
+- [ ] [Task, e.g., Test Kafka events by [date].]
+
+## Timeline
+- **Start Date**: [e.g., October 15, 2025]
+- **Completion Date**: [e.g., November 15, 2025]
+- **Milestones**: [e.g., Schema setup by [date].]
+Show in sidebar
+Updated Plans for All Services
+Below are the updated plans for all 13 services, incorporating the Inter-Service Communication section. Each plan reuses the structure from the previous response, with added details on synchronous (gRPC/REST) and asynchronous (Kafka) interactions, focusing on Phase 3 requirements and TVP priorities.
+
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Core Service Plan
+
+## Overview
+- **Purpose**: Manages customer data, program settings, and import logs, central to loyalty operations.
+- **Priority for TVP**: Medium (supports Points, Referrals, RFM Analytics).
+- **Dependencies**: Auth (merchant validation), RFM Analytics (RFM scores), Shopify API (imports).
+
+## Database Setup
+- **Database Type**: PostgreSQL
+- **Tables**: `customers`, `program_settings`, `customer_import_logs`.
+- **Schema Details**:
+  - `customers`: `id` (UUID, PK), `merchant_id` (UUID, indexed), `email` (VARCHAR, encrypted), `rfm_score` (JSONB), `metadata` (JSONB), `created_at`, `updated_at`.
+  - `program_settings`: `id` (UUID, PK), `merchant_id` (UUID, unique), `rfm_thresholds` (JSONB).
+  - Indexes: `idx_customers_merchant_id`, `idx_customers_rfm_score` (GIN).
+  - Triggers: `trg_customers_updated_at`.
+- **GDPR/CCPA Compliance**: `email` encrypted with pgcrypto; redacts PII on `gdpr_request.created`.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**:
+    - Exposes `/core.v1/GetCustomerRFM` (input: `customer_id`, `merchant_id`; output: `rfm_score`) to Points, Referrals, Campaign.
+    - Exposes `/core.v1/CreateCustomer` (input: `merchant_id`, `email`; output: `customer_id`) for Frontend, Shopify imports.
+    - Calls `/auth.v1/ValidateMerchant` (input: `merchant_id`; output: boolean) to verify merchants.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**:
+    - `customer.created` (consumers: Campaign for VIP tier checks, AdminFeatures for welcome emails).
+    - `customer.updated` (consumers: RFM Analytics for score recalculation, AdminCore for audit logs).
+  - **Events Consumed**:
+    - `rfm.updated` (from RFM Analytics): Updates `customers.rfm_score`.
+    - `gdpr_request.created` (from AdminCore): Redacts `customers.email`.
+- **Saga Patterns**: Points (`points.earned`) → RFM Analytics (`rfm.updated`) → Core (`rfm_score` update).
+
+## Key Endpoints
+- **gRPC**: `/core.v1/GetCustomerRFM`, `/core.v1/CreateCustomer`.
+- **Access Patterns**: Moderate read/write; high-read for `rfm_score`.
+- **Rate Limits**: Shopify API (40 req/s Plus for imports).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `CoreRepository` (`findById`, `updateRFMScore`).
+- **E2E Tests**: Cypress for `/core.v1/GetCustomerRFM`.
+- **Load Tests**: k6 for 5,000 merchant queries.
+- **Compliance Tests**: Verify `email` encryption, audit logging.
+
+## Deployment
+- **Docker Compose**: PostgreSQL on port 5433.
+- **Environment Variables**: `CORE_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Read replicas for `customers`.
+
+## Risks and Mitigations
+- **Risks**: High read latency for `rfm_score`; Shopify rate limits.
+- **Mitigations**: GIN index, batch imports.
+
+## Action Items
+- [ ] Deploy `core_db` by July 28, 2025.
+- [ ] Test `customer.created` by July 31, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 15, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Auth Service Plan
+
+## Overview
+- **Purpose**: Manages merchant authentication, sessions, and impersonation.
+- **Priority for TVP**: Low (supports other services).
+- **Dependencies**: API Gateway (token validation).
+
+## Database Setup
+- **Database Type**: PostgreSQL
+- **Tables**: `merchants`, `admin_users`, `admin_sessions`, `impersonation_sessions`.
+- **Schema Details**:
+  - `merchants`: `id` (UUID, PK), `shop_domain` (VARCHAR, unique), `language` (JSONB).
+  - Indexes: `idx_merchants_shop_domain`, `idx_merchants_language` (GIN).
+  - Triggers: `trg_normalize_shop_domain`.
+- **GDPR/CCPA Compliance**: `admin_users.email` encrypted.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**:
+    - Exposes `/auth.v1/ValidateToken` (input: `token`; output: boolean) to API Gateway.
+    - Exposes `/auth.v1/ValidateMerchant` (input: `merchant_id`; output: boolean) to Core, Points, Referrals.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `merchant.created` (consumers: Core for customer setup).
+  - **Events Consumed**: None.
+- **Saga Patterns**: None.
+
+## Key Endpoints
+- **gRPC**: `/auth.v1/ValidateToken`.
+- **Access Patterns**: Low write, moderate read (session validation).
+- **Rate Limits**: None (internal).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `AuthRepository` (`findByShopDomain`).
+- **E2E Tests**: Cypress for `/auth.v1/ValidateToken`.
+- **Load Tests**: k6 for 5,000 logins/hour.
+- **Compliance Tests**: Verify `email` encryption.
+
+## Deployment
+- **Docker Compose**: PostgreSQL on port 5432.
+- **Environment Variables**: `AUTH_DB_HOST`.
+- **Scaling Considerations**: Minimal scaling.
+
+## Risks and Mitigations
+- **Risks**: Session token leaks.
+- **Mitigations**: Short-lived tokens, Redis caching.
+
+## Action Items
+- [ ] Deploy `auth_db` by July 28, 2025.
+- [ ] Test `merchant.created` by July 30, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 5, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Points Service Plan
+
+## Overview
+- **Purpose**: Manages points transactions and reward redemptions.
+- **Priority for TVP**: High (core TVP feature).
+- **Dependencies**: Core (customer data), Auth (merchant validation), Shopify API.
+
+## Database Setup
+- **Database Type**: MongoDB
+- **Collections**: `points_transactions`, `reward_redemptions`, `pos_offline_queue`.
+- **Schema Details**:
+  - `points_transactions`: `id`, `customer_id`, `merchant_id`, `points`, `type`.
+  - Indexes: `customer_id`, `merchant_id`, `created_at`.
+- **GDPR/CCPA Compliance**: No PII; audit logs via Kafka.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**:
+    - Exposes `/points.v1/GetPointsBalance` (input: `customer_id`, `merchant_id`; output: `balance`) to Frontend.
+    - Calls `/core.v1/GetCustomerRFM` (input: `customer_id`, `merchant_id`) for validation.
+    - Calls `/auth.v1/ValidateMerchant` (input: `merchant_id`) for security.
+  - **REST**: Consumes Shopify `/orders/create` webhooks via API Gateway.
+- **Asynchronous Communication**:
+  - **Events Produced**: `points.earned` (consumers: RFM Analytics for score updates, AdminCore for audit logs).
+  - **Events Consumed**: None.
+- **Saga Patterns**: Points → RFM Analytics → Core.
+
+## Key Endpoints
+- **gRPC**: `/points.v1/GetPointsBalance`.
+- **Access Patterns**: High write (10,000 orders/hour).
+- **Rate Limits**: Shopify API (40 req/s Plus).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `PointsRepository` (`createTransaction`).
+- **E2E Tests**: Cypress for `/points.v1/GetPointsBalance`.
+- **Load Tests**: k6 for 10,000 transactions/hour.
+- **Compliance Tests**: Audit log creation.
+
+## Deployment
+- **Docker Compose**: MongoDB on port 27017.
+- **Environment Variables**: `POINTS_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Sharding for writes.
+
+## Risks and Mitigations
+- **Risks**: Write bottlenecks.
+- **Mitigations**: MongoDB sharding, batch writes.
+
+## Action Items
+- [ ] Deploy `points_db` by July 28, 2025.
+- [ ] Test `points.earned` by July 31, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 10, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Referrals Service Plan
+
+## Overview
+- **Purpose**: Manages referral links and conversions (7% SMS conversion).
+- **Priority for TVP**: High (core TVP feature).
+- **Dependencies**: Core (customer data), Points (rewards), Auth (merchant validation).
+
+## Database Setup
+- **Database Type**: PostgreSQL + Redis
+- **Tables/Keys**: `referrals` (PostgreSQL), `referral:{merchant_id}:{id}` (Redis).
+- **Schema Details**:
+  - `referrals`: `id`, `merchant_id`, `customer_id`, `referral_link_id`, `status`.
+  - Indexes: `idx_referrals_merchant_id`, `idx_referrals_referral_link_id`.
+- **GDPR/CCPA Compliance**: `customer_id` linked to Core’s encrypted `email`.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**:
+    - Exposes `/referrals.v1/GetReferralStatus` (input: `referral_id`, `merchant_id`; output: `status`) to Frontend.
+    - Calls `/core.v1/GetCustomerRFM` (input: `customer_id`, `merchant_id`) for validation.
+    - Calls `/auth.v1/ValidateMerchant` (input: `merchant_id`).
+  - **REST**: Consumes Shopify `/orders/create` via API Gateway.
+- **Asynchronous Communication**:
+  - **Events Produced**: `referral.completed` (consumers: Points for rewards, RFM Analytics for scores, AdminCore for audit logs).
+  - **Events Consumed**: None.
+- **Saga Patterns**: Referrals → Points → RFM Analytics.
+
+## Key Endpoints
+- **gRPC**: `/referrals.v1/GetReferralStatus`.
+- **Access Patterns**: High read/write (7% SMS conversion).
+- **Rate Limits**: Shopify API (40 req/s Plus).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `ReferralsRepository` (`getReferral`).
+- **E2E Tests**: Cypress for `/referrals.v1/GetReferralStatus`.
+- **Load Tests**: k6 for 700 conversions/hour.
+- **Compliance Tests**: Audit logs via `referral.completed`.
+
+## Deployment
+- **Docker Compose**: PostgreSQL (port 5434), Redis (port 6379).
+- **Environment Variables**: `REFERRALS_DB_HOST`, `REFERRALS_REDIS_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Redis for fast lookups, PostgreSQL read replicas.
+
+## Risks and Mitigations
+- **Risks**: Redis cache inconsistency.
+- **Mitigations**: TTLs, PostgreSQL sync.
+
+## Action Items
+- [ ] Deploy `referrals_db` by July 28, 2025.
+- [ ] Test `referral.completed` by July 31, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 10, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# RFM Analytics Service Plan
+
+## Overview
+- **Purpose**: Calculates RFM scores and customer segments.
+- **Priority for TVP**: High (core TVP feature).
+- **Dependencies**: Core (customer data), Points, Referrals (event triggers).
+
+## Database Setup
+- **Database Type**: TimescaleDB
+- **Tables**: `rfm_segment_deltas`, `rfm_segment_counts`, `rfm_score_history`, `customer_segments`.
+- **Schema Details**:
+  - `rfm_segment_deltas`: `id`, `merchant_id`, `customer_id`, `rfm_score` (JSONB).
+  - Indexes: `idx_rfm_segment_deltas_merchant_id`.
+  - Hypertable: `rfm_segment_deltas` on `created_at`.
+- **GDPR/CCPA Compliance**: No direct PII.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**:
+    - Exposes `/rfm.v1/GetSegmentCounts` (input: `merchant_id`; output: segment data) to Frontend, Campaign.
+    - Calls `/core.v1/GetCustomerRFM` (input: `customer_id`, `merchant_id`) for validation.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `rfm.updated` (consumer: Core for `rfm_score` updates).
+  - **Events Consumed**: `points.earned` (Points), `referral.completed` (Referrals), `customer.updated` (Core).
+- **Saga Patterns**: Points/Referrals → RFM Analytics → Core.
+
+## Key Endpoints
+- **gRPC**: `/rfm.v1/GetSegmentCounts`.
+- **Access Patterns**: Analytical queries, daily refresh (`0 1 * * *`).
+- **Rate Limits**: None (internal).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `RFMAnalyticsRepository` (`getSegmentCounts`).
+- **E2E Tests**: Cypress for `/rfm.v1/GetSegmentCounts`.
+- **Load Tests**: k6 for daily analytics refresh.
+- **Compliance Tests**: Verify no PII exposure.
+
+## Deployment
+- **Docker Compose**: TimescaleDB on port 5435.
+- **Environment Variables**: `RFM_ANALYTICS_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Hypertable partitioning.
+
+## Risks and Mitigations
+- **Risks**: Slow analytical queries.
+- **Mitigations**: Materialized views, indexing.
+
+## Action Items
+- [ ] Deploy `rfm_db` by July 28, 2025.
+- [ ] Test `rfm.updated` by August 1, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 12, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# AdminCore Service Plan
+
+## Overview
+- **Purpose**: Handles audit logs and GDPR/CCPA compliance.
+- **Priority for TVP**: Medium (supports compliance).
+- **Dependencies**: Points, Referrals, Core (audit logs).
+
+## Database Setup
+- **Database Type**: PostgreSQL
+- **Tables**: `audit_logs`, `gdpr_requests`, `gdpr_redaction_log`, `webhook_idempotency_keys`.
+- **Schema Details**:
+  - `audit_logs`: `id`, `merchant_id`, `entity_type`, `action`.
+  - Indexes: `idx_audit_logs_merchant_id`.
+- **GDPR/CCPA Compliance**: Logs GDPR requests, redacts PII.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**: Exposes `/admin_core.v1/GetAuditLogs` (input: `merchant_id`; output: logs) to Frontend.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `gdpr_request.created` (consumers: Core for PII redaction).
+  - **Events Consumed**: `audit_log` (Points, Referrals), `customer.updated` (Core), `task.completed` (Event Tracking).
+- **Saga Patterns**: AdminCore → Core (PII redaction).
+
+## Key Endpoints
+- **gRPC**: `/admin_core.v1/GetAuditLogs`.
+- **Access Patterns**: Low write, moderate read.
+- **Rate Limits**: None (internal).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `AdminCoreRepository` (`createAuditLog`).
+- **E2E Tests**: Cypress for `/admin_core.v1/GetAuditLogs`.
+- **Load Tests**: k6 for audit log queries.
+- **Compliance Tests**: Verify GDPR request logging.
+
+## Deployment
+- **Docker Compose**: PostgreSQL on port 5436.
+- **Environment Variables**: `ADMIN_CORE_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Minimal scaling.
+
+## Risks and Mitigations
+- **Risks**: Missing audit logs.
+- **Mitigations**: Kafka retries, DB triggers.
+
+## Action Items
+- [ ] Deploy `admin_core_db` by July 29, 2025.
+- [ ] Test `gdpr_request.created` by August 2, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 8, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# AdminFeatures Service Plan
+
+## Overview
+- **Purpose**: Manages email templates, events, and integrations.
+- **Priority for TVP**: Low (Phase 4 focus).
+- **Dependencies**: Core (customer data), Event Tracking (task queue).
+
+## Database Setup
+- **Database Type**: PostgreSQL
+- **Tables**: `email_templates`, `email_events`, `shopify_flow_templates`, `integrations`.
+- **Schema Details**:
+  - `email_templates`: `id`, `merchant_id`, `template_id`, `content` (JSONB).
+  - Indexes: `idx_email_templates_merchant_id`.
+- **GDPR/CCPA Compliance**: `integrations.credentials` encrypted.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**: Exposes `/admin_features.v1/CreateEmailTemplate` (input: `merchant_id`, `content`; output: `template_id`) to Frontend.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `email_event.created` (consumer: Event Tracking for task queue).
+  - **Events Consumed**: `customer.created` (Core) for welcome emails.
+- **Saga Patterns**: AdminFeatures → Event Tracking → AdminCore.
+
+## Key Endpoints
+- **gRPC**: `/admin_features.v1/CreateEmailTemplate`.
+- **Access Patterns**: Low write/read (admin tasks).
+- **Rate Limits**: None (internal).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `AdminFeaturesRepository` (`createEmailTemplate`).
+- **E2E Tests**: Cypress for `/admin_features.v1/CreateEmailTemplate`.
+- **Load Tests**: Minimal (low volume).
+- **Compliance Tests**: Verify `credentials` encryption.
+
+## Deployment
+- **Docker Compose**: PostgreSQL on port 5437.
+- **Environment Variables**: `ADMIN_FEATURES_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Minimal scaling.
+
+## Risks and Mitigations
+- **Risks**: Template misconfiguration.
+- **Mitigations**: Schema validation.
+
+## Action Items
+- [ ] Deploy `admin_features_db` by July 29, 2025.
+- [ ] Test `email_event.created` by August 3, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 7, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Campaign Service Plan
+
+## Overview
+- **Purpose**: Manages VIP tiers for loyalty campaigns.
+- **Priority for TVP**: Low (Phase 4 focus).
+- **Dependencies**: Core (customer data).
+
+## Database Setup
+- **Database Type**: PostgreSQL
+- **Tables**: `vip_tiers`.
+- **Schema Details**:
+  - `vip_tiers`: `id`, `merchant_id`, `tier_id`, `config` (JSONB).
+  - Indexes: `idx_vip_tiers_merchant_id`.
+- **GDPR/CCPA Compliance**: No PII.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**: Exposes `/campaign.v1/GetVIPTier` (input: `merchant_id`, `tier_id`; output: `config`) to Frontend.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `vip_tier.assigned` (Phase 6, consumers: Points).
+  - **Events Consumed**: `customer.created` (Core) for tier checks.
+- **Saga Patterns**: None in Phase 3.
+
+## Key Endpoints
+- **gRPC**: `/campaign.v1/GetVIPTier`.
+- **Access Patterns**: Low read/write (static configs).
+- **Rate Limits**: None (internal).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `CampaignRepository` (`createVIPTier`).
+- **E2E Tests**: Cypress for `/campaign.v1/GetVIPTier`.
+- **Load Tests**: Minimal (low volume).
+- **Compliance Tests**: None.
+
+## Deployment
+- **Docker Compose**: PostgreSQL on port 5438.
+- **Environment Variables**: `CAMPAIGN_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Minimal scaling.
+
+## Risks and Mitigations
+- **Risks**: Misconfigured tiers.
+- **Mitigations**: JSONB schema validation.
+
+## Action Items
+- [ ] Deploy `campaign_db` by July 29, 2025.
+- [ ] Test `customer.created` consumption by August 3, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 7, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Event Tracking Service Plan
+
+## Overview
+- **Purpose**: Manages async task queue (e.g., email sends).
+- **Priority for TVP**: Medium (supports AdminFeatures).
+- **Dependencies**: AdminFeatures (email events), AdminCore (audit logs).
+
+## Database Setup
+- **Database Type**: PostgreSQL
+- **Tables**: `queue_tasks`.
+- **Schema Details**:
+  - `queue_tasks`: `id`, `merchant_id`, `task_type`, `status`, `payload` (JSONB).
+  - Indexes: `idx_queue_tasks_merchant_id`, `idx_queue_tasks_status`.
+- **GDPR/CCPA Compliance**: No PII; audit logs via Kafka.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**: Exposes `/event_tracking.v1/CreateTask` (input: `merchant_id`, `task_type`; output: `task_id`) to AdminFeatures.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `task.created`, `task.completed` (consumer: AdminCore for audit logs).
+  - **Events Consumed**: `email_event.created` (AdminFeatures) for task queuing.
+- **Saga Patterns**: AdminFeatures → Event Tracking → AdminCore.
+
+## Key Endpoints
+- **gRPC**: `/event_tracking.v1/CreateTask`.
+- **Access Patterns**: Moderate write/read (task queue).
+- **Rate Limits**: None (internal).
+
+## Testing Strategy
+- **Unit Tests**: Jest for `EventTrackingRepository` (`createTask`).
+- **E2E Tests**: Cypress for `/event_tracking.v1/CreateTask`.
+- **Load Tests**: k6 for task queue throughput.
+- **Compliance Tests**: Audit log creation.
+
+## Deployment
+- **Docker Compose**: PostgreSQL on port 5439.
+- **Environment Variables**: `EVENT_TRACKING_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Worker processes for tasks.
+
+## Risks and Mitigations
+- **Risks**: Task queue backlog.
+- **Mitigations**: Status indexing, worker scaling.
+
+## Action Items
+- [ ] Deploy `event_tracking_db` by July 29, 2025.
+- [ ] Test `task.created` by August 2, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 8, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# API Gateway Service Plan
+
+## Overview
+- **Purpose**: Routes Shopify webhooks and gRPC/REST requests.
+- **Priority for TVP**: Medium (enables Points, Referrals).
+- **Dependencies**: Auth (token validation), Redis (rate limiting).
+
+## Database Setup
+- **Database Type**: Redis
+- **Keys**: `rate_limit:{merchant_id}:{endpoint}`.
+- **Schema Details**: Key-value with TTL for rate limits.
+- **GDPR/CCPA Compliance**: No PII.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**:
+    - Calls `/auth.v1/ValidateToken` (input: `token`) for all requests.
+    - Routes to `/points.v1/*`, `/referrals.v1/*`, `/core.v1/*`, etc.
+  - **REST**: Exposes `/webhooks/orders/create` to route Shopify webhooks to Points, Referrals.
+- **Asynchronous Communication**:
+  - **Events Produced**: `webhook.received` (consumer: AdminCore for debugging, optional).
+  - **Events Consumed**: None.
+- **Saga Patterns**: None.
+
+## Key Endpoints
+- **REST**: `/webhooks/orders/create`.
+- **Access Patterns**: High write (10,000 orders/hour).
+- **Rate Limits**: Shopify API (40 req/s Plus), Redis limits.
+
+## Testing Strategy
+- **Unit Tests**: Jest for `ApiGatewayRepository` (`trackRateLimit`).
+- **E2E Tests**: Cypress for webhook routing.
+- **Load Tests**: k6 for 10,000 webhooks/hour.
+- **Compliance Tests**: None.
+
+## Deployment
+- **Docker Compose**: Redis on port 6380.
+- **Environment Variables**: `API_GATEWAY_REDIS_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Redis clustering.
+
+## Risks and Mitigations
+- **Risks**: Rate limit breaches.
+- **Mitigations**: Redis TTLs, fallback queues.
+
+## Action Items
+- [ ] Deploy `api_gateway_redis` by July 28, 2025.
+- [ ] Test webhook routing by July 31, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 5, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Gamification Service Plan
+
+## Overview
+- **Purpose**: Prepares Redis for badges/leaderboards (Phase 6).
+- **Priority for TVP**: Low (Phase 3 prep only).
+- **Dependencies**: Core (customer data).
+
+## Database Setup
+- **Database Type**: Redis
+- **Keys**: `badge:{merchant_id}:{customer_id}:{badge}`, `leaderboard:{merchant_id}`.
+- **Schema Details**: Key-value, sorted sets.
+- **GDPR/CCPA Compliance**: No PII.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**: Exposes `/gamification.v1/AwardBadge` (Phase 6) to Frontend.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `badge.awarded` (Phase 6, consumers: Points, AdminCore).
+  - **Events Consumed**: None in Phase 3.
+- **Saga Patterns**: None in Phase 3.
+
+## Key Endpoints
+- **gRPC**: `/gamification.v1/AwardBadge` (Phase 6).
+- **Access Patterns**: None in Phase 3.
+- **Rate Limits**: None.
+
+## Testing Strategy
+- **Unit Tests**: Jest for `GamificationRepository` (`awardBadge`).
+- **E2E Tests**: None in Phase 3.
+- **Load Tests**: None in Phase 3.
+- **Compliance Tests**: None.
+
+## Deployment
+- **Docker Compose**: Redis on port 6381.
+- **Environment Variables**: `GAMIFICATION_REDIS_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Redis clustering (Phase 6).
+
+## Risks and Mitigations
+- **Risks**: Premature implementation.
+- **Mitigations**: Defer logic to Phase 6.
+
+## Action Items
+- [ ] Deploy `gamification_redis` by July 30, 2025.
+- [ ] Test Redis keys by August 3, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 5, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Products Service Plan
+
+## Overview
+- **Purpose**: Manages product search/recommendations (Phase 6 prep).
+- **Priority for TVP**: Low (Phase 3 prep only).
+- **Dependencies**: Core (customer data).
+
+## Database Setup
+- **Database Type**: Elasticsearch
+- **Index**: `products` (`id`, `merchant_id`, `name`, `rfm_score`).
+- **Schema Details**: Text fields for search, keyword for `merchant_id`.
+- **GDPR/CCPA Compliance**: No PII.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**: Exposes `/products.v1/SearchProducts` (Phase 6, input: `merchant_id`, `query`; output: products) to Frontend.
+  - **REST**: None.
+- **Asynchronous Communication**:
+  - **Events Produced**: `product.updated` (Phase 6, consumer: RFM Analytics).
+  - **Events Consumed**: None in Phase 3.
+- **Saga Patterns**: None in Phase 3.
+
+## Key Endpoints
+- **gRPC**: `/products.v1/SearchProducts` (Phase 6).
+- **Access Patterns**: None in Phase 3.
+- **Rate Limits**: None.
+
+## Testing Strategy
+- **Unit Tests**: Jest for `ProductsRepository` (`searchProducts`).
+- **E2E Tests**: None in Phase 3.
+- **Load Tests**: None in Phase 3.
+- **Compliance Tests**: None.
+
+## Deployment
+- **Docker Compose**: Elasticsearch on port 9200.
+- **Environment Variables**: `PRODUCTS_DB_HOST`, `KAFKA_BROKER`.
+- **Scaling Considerations**: Elasticsearch sharding (Phase 6).
+
+## Risks and Mitigations
+- **Risks**: Premature indexing.
+- **Mitigations**: Defer logic to Phase 6.
+
+## Action Items
+- [ ] Deploy `products_db` by July 30, 2025.
+- [ ] Test index creation by August 3, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 5, 2025
+Show in sidebar
+text
+
+Collapse
+
+Wrap
+
+Copy
+# Frontend Service Plan
+
+## Overview
+- **Purpose**: Provides UI for merchants and customers.
+- **Priority for TVP**: Medium (displays Points, Referrals, RFM data).
+- **Dependencies**: API Gateway, Core, Points, Referrals, RFM Analytics.
+
+## Database Setup
+- **Database Type**: None (queries via API Gateway).
+- **Tables/Collections**: N/A.
+- **Schema Details**: N/A.
+- **GDPR/CCPA Compliance**: No PII storage; relies on Core.
+
+## Inter-Service Communication
+- **Synchronous Communication**:
+  - **gRPC**:
+    - Calls `/points.v1/GetPointsBalance` (input: `customer_id`, `merchant_id`) for points display.
+    - Calls `/referrals.v1/GetReferralStatus` (input: `referral_id`, `merchant_id`) for referral status.
+    - Calls `/core.v1/GetCustomerRFM` (input: `customer_id`, `merchant_id`) for RFM data.
+    - Calls `/rfm.v1/GetSegmentCounts` (input: `merchant_id`) for analytics.
+  - **REST**: Exposes `/frontend/points`, `/frontend/referrals` (proxied via API Gateway).
+- **Asynchronous Communication**:
+  - **Events Produced**: None.
+  - **Events Consumed**: None.
+- **Saga Patterns**: None.
+
+## Key Endpoints
+- **REST**: `/frontend/points`, `/frontend/referrals`.
+- **Access Patterns**: High read (merchant dashboards).
+- **Rate Limits**: Shopify API (40 req/s Plus).
+
+## Testing Strategy
+- **Unit Tests**: Jest for UI components.
+- **E2E Tests**: Cypress for dashboard flows.
+- **Load Tests**: k6 for 5,000 merchant views/hour.
+- **Compliance Tests**: Verify no PII exposure.
+
+## Deployment
+- **Docker Compose**: Node.js server for SSR (port 3000).
+- **Environment Variables**: `API_GATEWAY_URL`.
+- **Scaling Considerations**: CDN for static assets.
+
+## Risks and Mitigations
+- **Risks**: UI latency.
+- **Mitigations**: API Gateway caching, CDN.
+
+## Action Items
+- [ ] Deploy frontend by July 30, 2025.
+- [ ] Test dashboard flows by August 5, 2025.
+
+## Timeline
+- **Start Date**: July 25, 2025
+- **Completion Date**: August 10, 2025
+Show in sidebar
+Implementation Notes
+Inter-Service Communication:
+Synchronous (gRPC/REST): Used for real-time queries (e.g., /core.v1/GetCustomerRFM) with low latency. API Gateway routes all external requests and validates tokens via Auth.
+Asynchronous (Kafka): Used for high-throughput, decoupled workflows (e.g., points.earned → RFM Analytics → Core). Expanded to Core, AdminCore, Event Tracking for GDPR/CCPA and task coordination.
+Saga Patterns: Ensure eventual consistency (e.g., Points → RFM Analytics → Core; AdminCore → Core for GDPR).
+Nx Monorepo:
+Store plans in docs/plans/.
+Use libs/kafka and libs/database for shared logic.
+Testing:
+Jest: Test inter-service calls (e.g., CoreService calling /auth.v1/ValidateMerchant).
+Cypress: Validate gRPC/REST flows (e.g., Frontend → API Gateway → Points).
+k6: Simulate 10,000 orders/hour for Points, Referrals, API Gateway.
+Deployment:
+Update docker-compose.yml with Kafka, Zookeeper, and all databases (PostgreSQL, MongoDB, Redis, TimescaleDB, Elasticsearch).
+Example Kafka service:
+yaml
+
+Collapse
+
+Wrap
+
+Copy
+kafka:
+  image: confluentinc/cp-kafka:7.0.1
+  environment:
+    KAFKA_BROKER_ID: 1
+    KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+  depends_on:
+    - zookeeper
+zookeeper:
+  image: confluentinc/cp-zookeeper:7.0.1
+  environment:
+    ZOOKEEPER_CLIENT_PORT: 2181
+GDPR/CCPA:
+Core, AdminCore, AdminFeatures handle PII encryption (email, credentials).
+Kafka events (gdpr_request.created, audit_log) ensure compliance logging.
+Solo Developer:
+Use AI tools (Grok, Copilot, Cursor) for 30–40% efficiency.
+Prioritize Points, Referrals, RFM Analytics for TVP; defer Gamification, Products to Phase 6.
+Would you like a consolidated docker-compose.yml for all services, a Jest test suite for inter-service communication (e.g., gRPC calls, Kafka events), or additional entity definitions (e.g., AuditLog.entity.ts)?
+
