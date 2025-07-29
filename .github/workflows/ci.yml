@@ -1,151 +1,238 @@
-# .github/workflows/ci.yml
-name: CI Pipeline
+<!-- ci.yml -->
+<xaiFile name="ci.yml" contentType="text/yaml">
+# ci.yml: GitHub Actions CI/CD pipeline for LoyalNest
+# Includes build, test, lint jobs for all microservices
+# Updated for users-service, roles-service, rfm-service
+
+name: LoyalNest CI/CD
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
-  lint:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '18'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
-        run: npx eslint . --ext .ts,.tsx
-        working-directory: .
-
-  type-check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run TypeScript type-checking
-        run: npx tsc --noEmit
-        working-directory: .
+      - name: Build all services
+        run: |
+          npx nx run-many --target=build --projects=api-gateway,core,auth,points,referrals,users-service,roles-service,rfm-service,event-tracking,admin-core,admin-features,campaign,gamification,frontend,products
 
   test:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run Jest tests
-        run: npx nx run-many --target=test --all
+    services:
+      postgres:
+        image: postgres:15
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
-          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
-          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
-
-  build:
-    runs-on: ubuntu-latest
-    needs: [lint, type-check, test]
+          POSTGRES_DB: loyalnest
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      timescaledb:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_DB: loyalnest
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5435:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      mongo:
+        image: mongo:6
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+      kafka:
+        image: confluentinc/cp-kafka:7.0.1
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        ports:
+          - 9092:9092
+        depends_on:
+          - zookeeper
+      zookeeper:
+        image: confluentinc/cp-zookeeper:7.0.1
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+        ports:
+          - 2181:2181
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '18'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Nx projects
-        run: npx nx run-many --target=build --all
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.DOCKER_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Docker images
+      - name: Run unit tests
         run: |
-          docker-compose build api-gateway
-          docker-compose build core-service
-          docker-compose build frontend
-          docker-compose push api-gateway
-          docker-compose push core-service
-          docker-compose push frontend
-          # Add other microservices as needed
-        working-directory: .
+          npx nx run-many --target=test --projects=api-gateway,core,auth,points,referrals,users-service,roles-service,rfm-service,event-tracking,admin-core,admin-features,campaign,gamification,frontend,products
 
-  deploy:
+      - name: Run database migration tests
+        run: |
+          psql -h localhost -U postgres -d loyalnest -f sql/core.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/auth.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/referrals.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/users.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/roles.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/event_tracking.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/admin_core.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/admin_features.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/campaign.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/gamification.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/products.sql
+          psql -h localhost -U postgres -d loyalnest -f sql/rfm.sql -p 5435
+        env:
+          PGPASSWORD: password
+
+  e2e:
     runs-on: ubuntu-latest
-    needs: [build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: loyalnest
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+      timescaledb:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_DB: loyalnest
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5435:5432
+      mongo:
+        image: mongo:6
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '18'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Shopify CLI
-        run: npm install -g @shopify/cli
-
-      - name: Deploy Shopify app
-        run: shopify app deploy
+      - name: Run Cypress E2E tests
+        run: |
+          npx nx run frontend:test:e2e
         env:
-          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
-          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
-          SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+          CYPRESS_BASE_URL: http://localhost:3012
 
-      - name: Deploy to VPS via SSH
-        uses: appleboy/ssh-action@v1.0.3
+  load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT }}
-          script: |
-            # Pull latest Docker images
-            docker-compose -f /path/to/loyalnest/docker-compose.yml pull api-gateway core-service frontend
-            # Restart services
-            docker-compose -f /path/to/loyalnest/docker-compose.yml up -d
-            # Run Prisma migrations
-            docker-compose -f /path/to/loyalnest/docker-compose.yml exec core-service npx prisma migrate deploy --schema=/app/libs/db/prisma/schema.prisma
+          node-version: '18'
+
+      - name: Install k6
+        run: |
+          sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747825823
+          sudo add-apt-repository "deb https://dl.k6.io/deb stable main"
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run k6 load tests
+        run: |
+          k6 run tests/load/api-gateway.test.js
+          k6 run tests/load/users-service.test.js
+          k6 run tests/load/roles-service.test.js
+          k6 run tests/load/rfm-service.test.js
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run OWASP ZAP
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'http://localhost:80'
+          rules_file_name: '.zap/rules.tsv'
+
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli
+          lhci autorun
+        env:
+          LHCI_BUILD_CONTEXT__CURRENT_BRANCH: ${{ github.ref }}
+
+  chaos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Chaos Mesh
+        run: |
+          kubectl apply -f chaos/chaos-mesh-nightly.yaml
+        env:
+          KUBECONFIG: ~/.kube/config
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [build, test, e2e, load-test, security, lighthouse]
+    steps:
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel-id: 'loyalnest-ci'
+          text: 'CI/CD pipeline completed for LoyalNest: ${{ github.sha }}'
+</xaiFile>

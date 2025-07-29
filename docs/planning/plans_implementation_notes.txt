@@ -1,0 +1,42 @@
+Implementation Notes
+Inter-Service Communication:
+Synchronous (gRPC/REST): Used for real-time queries (e.g., /core.v1/GetCustomerRFM) with low latency. API Gateway routes all external requests and validates tokens via Auth.
+Asynchronous (Kafka): Used for high-throughput, decoupled workflows (e.g., points.earned → RFM Analytics → Core). Expanded to Core, AdminCore, Event Tracking for GDPR/CCPA and task coordination.
+Saga Patterns: Ensure eventual consistency (e.g., Points → RFM Analytics → Core; AdminCore → Core for GDPR).
+Nx Monorepo:
+Store plans in docs/plans/.
+Use libs/kafka and libs/database for shared logic.
+Testing:
+Jest: Test inter-service calls (e.g., CoreService calling /auth.v1/ValidateMerchant).
+Cypress: Validate gRPC/REST flows (e.g., Frontend → API Gateway → Points).
+k6: Simulate 10,000 orders/hour for Points, Referrals, API Gateway.
+Deployment:
+Update docker-compose.yml with Kafka, Zookeeper, and all databases (PostgreSQL, MongoDB, Redis, TimescaleDB, Elasticsearch).
+Example Kafka service:
+yaml
+
+Collapse
+
+Wrap
+
+Copy
+kafka:
+  image: confluentinc/cp-kafka:7.0.1
+  environment:
+    KAFKA_BROKER_ID: 1
+    KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+  depends_on:
+    - zookeeper
+zookeeper:
+  image: confluentinc/cp-zookeeper:7.0.1
+  environment:
+    ZOOKEEPER_CLIENT_PORT: 2181
+GDPR/CCPA:
+Core, AdminCore, AdminFeatures handle PII encryption (email, credentials).
+Kafka events (gdpr_request.created, audit_log) ensure compliance logging.
+Solo Developer:
+Use AI tools (Grok, Copilot, Cursor) for 30–40% efficiency.
+Prioritize Points, Referrals, RFM Analytics for TVP; defer Gamification, Products to Phase 6.
+Would you like a consolidated docker-compose.yml for all services, a Jest test suite for inter-service communication (e.g., gRPC calls, Kafka events), or additional entity definitions (e.g., AuditLog.entity.ts)?
+
