@@ -114,6 +114,24 @@ roles-service		3051	roles-service-db
 roles-service-e2e		3151	roles-service-test-db
 
 
+Microservice (Port)				DB Service (Port)					SQL file
+-------------------				-----------------					---------
+admin_core-service (3010)		admin_core-service-db (5433)		admin_core-service.sql
+admin_features-service (3011)  	admin_features-service-db (5434)    admin_features-service.sql
+auth-service (3001)				auth-service-db (5435)				auth-service.sql
+campaign-service (3031)       	campaign-service-db (5436)			campaign-service.sql
+core-service (3002)          	core-service-db (5437) 				core-service.sql
+event_tracking-service (3007)   event_tracking-service-db (5438) 	event_tracking-service.sql
+gamification-service (3008)     gamification-service-db (5439) 		gamification-service.sql
+products-service (3021)         products-service-db (5440) 			products-service.sql
+referrals-service (3004)        referrals-service-db (5441) 		referrals-service.sql
+rfm-service (3006)       		rfm-service-db (5442) 				rfm-service.sql
+roles-service (3051)       	    roles-service-db (5443) 			roles-service.sql
+users-service (3041)          	users-service-db (5444) 			users-service.sql
+frontend (3020)					N/A									N/A
+api-gateway (3005)				N/A									N/A
+
+
 ===============
 to do
 ===============
