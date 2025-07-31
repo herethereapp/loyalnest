@@ -49,6 +49,74 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ merchant_id: string }`
     - **Output**: `{ status: string, rate_limit: { rest: number, graphql: number }, error: { code: string, message: string } | null }`
     - **Flow**: Query `api_logs` for rate limit usage, cache in Redis Streams (`rate_limit:{merchant_id}`), notify via AWS SNS if near threshold (95% of limit), log in `audit_logs`, track via PostHog (`rate_limit_alerted`).
+- **GraphQL Query Examples**:
+  - **Query: Validate Order for Points Earning**
+    - **Purpose**: Fetches order details from Shopify to validate before awarding points, used in `/v1/api/points/earn`.
+    - **Query**:
+      ```graphql
+      query GetOrderDetails($id: ID!) {
+        order(id: $id) {
+          id
+          totalPriceSet {
+            shopMoney {
+              amount
+              currencyCode
+            }
+          }
+          customer {
+            id
+          }
+          createdAt
+        }
+      }
+      ```
+    - **Variables**: `{ "id": "gid://shopify/Order/123456789" }`
+    - **Use Case**: Merchant Dashboard uses this to confirm order validity and calculate points (e.g., 10 points/$). The response feeds into `points_transactions` and applies RFM multipliers.
+  - **Query: Create Discount for Redemption**
+    - **Purpose**: Creates a discount code for point redemption, used in `/v1/api/rewards/redeem`.
+    - **Query**:
+      ```graphql
+      mutation CreateDiscount($input: DiscountCodeBasicInput!) {
+        discountCodeBasicCreate(basicCodeDiscount: $input) {
+          codeDiscountNode {
+            id
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                title
+                codes(first: 1) {
+                  nodes {
+                    code
+                  }
+                }
+              }
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+      ```
+    - **Variables**: 
+      ```json
+      {
+        "input": {
+          "title": "LoyalNest $5 Off",
+          "code": "LN5OFF",
+          "customerGets": {
+            "value": {
+              "discountAmount": {
+                "amount": 5.0,
+                "currencyCode": "USD"
+              }
+            }
+          },
+          "appliesOncePerCustomer": true
+        }
+      }
+      ```
+    - **Use Case**: Merchant Dashboard applies discounts at checkout via Shopify Checkout UI Extensions, storing the code in `reward_redemptions` (AES-256 encrypted).
 - **Service**: Points Service (gRPC: `/points.v1/*`, Dockerized).
 
 ### 2. Referral Program (Phase 1)
@@ -107,6 +175,75 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ merchant_id: string, referral_code: string | null, merchant_referral_id: string | null, date_range: { start: string, end: string } }`
     - **Output**: `{ status: string, analytics: { clicks: number, conversions: number, ctr: number, merchant_referrals: number }, error: { code: string, message: string } | null }`
     - **Flow**: Query `referral_links`, `referral_events`, `merchant_referrals`, cache in Redis Streams (`referral_analytics:{referral_code}`), log in `audit_logs`, track via PostHog (`referral_analytics_viewed`, 80%+ view rate).
+- **GraphQL Query Examples**:
+  - **Query: Generate Referral Code**
+    - **Purpose**: Creates a unique referral code via Shopify Storefront API for sharing, used in `/v1/api/referrals/create`.
+    - **Query**:
+      ```graphql
+      mutation CreateCustomerAccessToken($input: CustomerAccessTokenCreateInput!) {
+        customerAccessTokenCreate(input: $input) {
+          customerAccessToken {
+            accessToken
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+      ```
+    - **Variables**: 
+      ```json
+      {
+        "input": {
+          "email": "customer@example.com",
+          "password": "securepassword"
+        }
+      }
+      ```
+    - **Use Case**: Merchant Dashboard generates a `referral_code` stored in `referral_links`, used for tracking in Customer Widget and analytics.
+  - **Query: Award Referral Discount**
+    - **Purpose**: Creates a discount for a completed referral, used in `/v1/api/referrals/complete`.
+    - **Query**:
+      ```graphql
+      mutation CreateDiscount($input: DiscountCodeBasicInput!) {
+        discountCodeBasicCreate(basicCodeDiscount: $input) {
+          codeDiscountNode {
+            id
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                title
+                codes(first: 1) {
+                  nodes {
+                    code
+                  }
+                }
+              }
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+      ```
+    - **Variables**: 
+      ```json
+      {
+        "input": {
+          "title": "Referral 10% Off",
+          "code": "REF10OFF",
+          "customerGets": {
+            "value": {
+              "percentage": 0.1
+            }
+          },
+          "appliesOncePerCustomer": true
+        }
+      }
+      ```
+    - **Use Case**: Merchant Dashboard issues a 10% discount to referrer/referee, stored in `referrals.reward_id`, displayed in Customer Widget.
 - **Service**: Referrals Service (gRPC: `/referrals.v1/*`, Dockerized).
 
 ### 3. On-Site Content (Phase 1)
@@ -136,10 +273,26 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Output**: `{ status: string, preview: object, error: { code: string, message: string } | null }`
     - **Flow**: Validate inputs, update `program_settings.branding`, `program_settings.ab_tests`, cache in Redis Streams (`content:{merchant_id}:{locale}`, `ab_test:{merchant_id}`), log in `audit_logs`, track via PostHog (`content_updated`, `ab_test_started`, 10%+ click-through).
   - **GET** `/api/v1/rfm/nudges` (REST) | gRPC `/rfm.v1/RFMService/GetNudges`
-    - **Input ,(REST) | gRPC `/rfm.v1/RFMService/GetNudges`
-      - **Input**: `{ merchant_id: string, customer_id: string, locale: string }`
-      - **Output**: `{ status: string, nudges: [{ nudge_id: string, type: string, title: object, description: object, variants: object }], error: { code: string, message: string } | null }`
-      - **Flow**: Query `nudges`, `nudge_events`, cache in Redis Streams (`rfm:nudge:{customer_id}`), use i18next, log in `audit_logs`, track via PostHog (`rfm_nudge_viewed`, 10%+ conversion).
+    - **Input**: `{ merchant_id: string, customer_id: string, locale: string }`
+    - **Output**: `{ status: string, nudges: [{ nudge_id: string, type: string, title: object, description: object, variants: object }], error: { code: string, message: string } | null }`
+    - **Flow**: Query `nudges`, `nudge_events`, cache in Redis Streams (`rfm:nudge:{customer_id}`), use i18next, log in `audit_logs`, track via PostHog (`rfm_nudge_viewed`, 10%+ conversion).
+- **GraphQL Query Examples**:
+  - **Query: Fetch Customer Data for Widget Display**
+    - **Purpose**: Retrieves customer points balance for display in the rewards panel or loyalty page via Storefront API.
+    - **Query**:
+      ```graphql
+      query GetCustomerPoints($id: ID!) {
+        customer(id: $id) {
+          id
+          metafield(namespace: "loyalnest", key: "points_balance") {
+            value
+          }
+        }
+      }
+      ```
+    - **Variables**: `{ "id": "gid://shopify/Customer/987654321" }`
+    - **Use Case**: Customer Widget displays points balance from `customers.points_balance`, fetched via Storefront API for real-time updates.
+- **Service**: Frontend Service (gRPC: `/frontend.v1/*`, Dockerized).
 
 ### 4. Integrations (Phase 1)
 - **Goal**: Seamlessly connect with Shopify and third-party tools. Success metric: 99%+ sync accuracy, 90%+ notification delivery rate, 95%+ integration uptime.
@@ -173,6 +326,30 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ merchant_id: string, endpoint: string, status: string }`
     - **Output**: `{ status: string, retries: [{ log_id: string, endpoint: string, retry_count: number, status: string }], error: { code: string, message: string } | null }`
     - **Flow**: Query `api_logs`, cache in Redis Streams (`webhook:{merchant_id}`), stream via WebSocket, log in `audit_logs`, track via PostHog (`webhook_retry_viewed`, 80%+ view rate).
+- **GraphQL Query Examples**:
+  - **Query: Fetch Webhook Status**
+    - **Purpose**: Retrieves webhook subscription details to monitor integration health, used in `/v1/api/webhooks/retries`.
+    - **Query**:
+      ```graphql
+      query GetWebhookSubscriptions {
+        webhookSubscriptions(first: 10) {
+          edges {
+            node {
+              id
+              topic
+              endpoint {
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+              status
+            }
+          }
+        }
+      }
+      ```
+    - **Use Case**: Admin Module displays webhook status (e.g., `orders/create`) in the Webhook Retry Dashboard, streamed via WebSocket for real-time monitoring.
+- **Service**: Admin Service (gRPC: `/admin.v1/*`, Dockerized).
 
 ### 5. Analytics (Phase 1)
 - **Goal**: Provide actionable loyalty insights with RFM segmentation. Success metric: 80%+ dashboard interaction rate, <1s latency for real-time updates.
@@ -230,6 +407,26 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ merchant_id: string, metrics: array }`
     - **Output**: Stream `{ metrics: { segment_counts: object, nudge_events: object } }`
     - **Flow**: Stream data from `rfm_segment_counts`, `nudge_events`, cache in Redis Streams (`rfm:metrics:{merchant_id}:stream`), log in `audit_logs`, track via PostHog (`rfm_nudge_viewed`, <1s latency).
+- **GraphQL Query Examples**:
+  - **Query: Fetch Customer Segments for Analytics**
+    - **Purpose**: Retrieves customer segment data for Merchant Dashboard analytics, used in `/api/v1/rfm/analytics`.
+    - **Query**:
+      ```graphql
+      query GetCustomerSegments($merchantId: String!) {
+        customers(first: 100, query: $merchantId) {
+          edges {
+            node {
+              id
+              metafield(namespace: "loyalnest", key: "rfm_score") {
+                value
+              }
+            }
+          }
+        }
+      }
+      ```
+    - **Variables**: `{ "merchantId": "merchant_123" }`
+    - **Use Case**: Merchant Dashboard visualizes RFM segments (e.g., Champions) using Chart.js, sourced from `customer_segments` and `rfm_score`.
 - **Service**: RFM Service (gRPC: `/rfm.v1/*`, Dockerized), Analytics Service (gRPC: `/analytics.v1/*`, Dockerized for non-RFM metrics).
 
 ### 6. GDPR Compliance (Phase 1)
@@ -272,6 +469,25 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ customer_id: string, type: string, status: string, locale: string }`
     - **Output**: `{ status: string, consent_id: string, error: { code: string, message: string } | null }`
     - **Flow**: Validate `customer_id`, insert into `consents`, cache in Redis Streams (`consent:{customer_id}`), log in `audit_logs`, track via PostHog (`consent_granted`, 90%+ accuracy).
+- **GraphQL Query Examples**:
+  - **Query: Handle GDPR Data Request**
+    - **Purpose**: Fetches customer data for GDPR export, used in `/v1/api/gdpr/request`.
+    - **Query**:
+      ```graphql
+      query GetCustomerData($id: ID!) {
+        customer(id: $id) {
+          id
+          email
+          firstName
+          lastName
+          metafield(namespace: "loyalnest", key: "rfm_score") {
+            value
+          }
+        }
+      }
+      ```
+    - **Variables**: `{ "id": "gid://shopify/Customer/987654321" }`
+    - **Use Case**: Admin Module processes GDPR `data_request`, exporting encrypted `customers.email` and `rfm_score` for compliance.
 - **Service**: Admin Service (gRPC: `/admin.v1/*`, Dockerized).
 
 ### 7. Security (Phase 1)
@@ -314,6 +530,59 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ shopify_domain: string, token: string, ip: string }`
     - **Output**: `{ status: string, access_token: string, error: { code: string, message: string } | null }`
     - **Flow**: Validate OAuth token, check `ip_whitelist`, verify MFA via Auth0, generate JWT, cache in Redis Streams (`auth:{merchant_id}`), log in `audit_logs`, track via PostHog (`login_success`, 100% secure authentication).
+- **GraphQL Query Examples**:
+  - **Query: Verify Shopify OAuth Token**
+    - **Purpose**: Validates merchant’s Shopify OAuth token for secure access, used in `/v1/api/auth/login`.
+    - **Query**:
+      ```graphql
+      query GetShopDetails {
+        shop {
+          id
+          name
+          email
+          domain
+        }
+      }
+      ```
+    - **Use Case**: Merchant Dashboard authenticates via Shopify OAuth, storing `api_token` in `merchants` (AES-256 encrypted) for secure access to Admin Module.
+  - **Query: Fetch Admin User Permissions**
+    - **Purpose**: Retrieves admin user permissions for RBAC enforcement, used in `/roles.v1/RolesService/GetPermissions`.
+    - **Query**:
+      ```graphql
+      query GetAdminUser($id: ID!) {
+        user(id: $id) {
+          id
+          metafield(namespace: "loyalnest", key: "permissions") {
+            value
+          }
+        }
+      }
+      ```
+    - **Variables**: `{ "id": "gid://shopify/User/123456789" }`
+    - **Use Case**: Admin Module enforces RBAC by checking `roles.permissions` against `admin_users.metadata`, ensuring only authorized access (e.g., `admin:full`, `admin:analytics`).
+  - **Query: Check Webhook Status for Idempotency**
+    - **Purpose**: Verifies webhook subscription status to ensure idempotent processing, used in webhook handling.
+    - **Query**:
+      ```graphql
+      query GetWebhookSubscriptions {
+        webhookSubscriptions(first: 10) {
+          edges {
+            node {
+              id
+              topic
+              endpoint {
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+              status
+            }
+          }
+        }
+      }
+      ```
+    - **Use Case**: Admin Module validates webhook subscriptions (e.g., `orders/create`) to prevent duplicate processing, using Redis keys (`webhook:{merchant_id}:{event_id}`) for idempotency.
+- **Service**: Auth Service (gRPC: `/auth.v1/*`, Dockerized).
 
 ### 8. Testing and Monitoring (Phase 1)
 - **Goal**: Ensure reliability and performance. Success metric: 99%+ uptime, <1s alert latency, 80%+ test coverage, 95%+ Redis cache hit rate.
@@ -333,6 +602,57 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ service: string, time_range: string }`
     - **Output**: `{ status: string, metrics: { latency: number, error_rate: number, cache_hits: number, queue_delays: number, chaos_results: object }, error: { code: string, message: string } | null }`
     - **Flow**: Query Prometheus, cache in Redis Streams (`metrics:{service}`), enforce RBAC (`admin:full`, `admin:analytics`), log in `audit_logs`, track via PostHog (`monitoring_viewed`, 80%+ view rate).
+- **GraphQL Query Examples**:
+  - **Query: Fetch Shop Order Metrics for Load Testing**
+    - **Purpose**: Retrieves recent order data to monitor system performance during load testing, used in `/v1/api/monitoring`.
+    - **Query**:
+      ```graphql
+      query GetShopOrders($first: Int, $after: String) {
+        orders(first: $first, after: $after) {
+          edges {
+            node {
+              id
+              createdAt
+              totalPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+      ```
+    - **Variables**: `{ "first": 10, "after": null }`
+    - **Use Case**: Admin Module monitors order processing rates (10,000 orders/hour) during k6 load tests, feeding into Prometheus/Grafana for latency and error rate metrics.
+  - **Query: Check API Usage for Rate Limit Monitoring**
+    - **Purpose**: Retrieves API usage data to track Shopify API rate limits, used in `/v1/api/monitoring`.
+    - **Query**:
+      ```graphql
+      query GetAppApiUsage {
+        app {
+          id
+          apiUsage {
+            graphql {
+              currentUsage
+              limit
+            }
+            rest {
+              currentUsage
+              limit
+            }
+          }
+        }
+      }
+      ```
+    - **Use Case**: Admin Module monitors API usage (2 req/s REST, 40 req/s GraphQL for Plus) to trigger AWS SNS alerts when nearing rate limits, logged in `audit_logs` and tracked via PostHog (`rate_limit_alerted`).
+- **Service**: Admin Service (gRPC: `/admin.v1/*`, Dockerized).
+
 
 ### 9. Admin Module (Phase 1)
 - **Goal**: Provide tools for platform management. Success metric: 90%+ task completion rate, <1s latency for real-time logs.
@@ -356,8 +676,8 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - `merchant_id`, `task_name`, `status`, `completed_at`: Tracks onboarding progress.
   - **Table**: `audit_logs`
     - `action` (text, NOT NULL): e.g., `merchant_added`, `onboarding_step_completed`, `rfm_config_updated`.
-    - **actor_id** (text, FK → `admin_users` | NULL): Admin user.
-    - **metadata** (jsonb): e.g., `{"plan_id": "basic", "step": "rfm_config"}`.
+    - `actor_id` (text, FK → `admin_users` | NULL): Admin user.
+    - `metadata` (jsonb): e.g., `{"plan_id": "basic", "step": "rfm_config"}`.
   - **Indexes**: `idx_merchants_shopify_domain` (btree: `shopify_domain`), `idx_admin_users_username` (btree: `username`), `idx_setup_tasks_merchant_id` (btree: `merchant_id`), `idx_audit_logs_action` (btree: `action`).
   - **Backup Retention**: 90 days in Backblaze B2, encrypted with AES-256.
 - **API Sketch**:
@@ -373,4 +693,95 @@ Essential for core functionality, user engagement, Shopify App Store compliance,
     - **Input**: `{ merchant_id: string, actions: array }`
     - **Output**: Stream `{ logs: [{ action: string, metadata: object, created_at: string }] }`
     - **Flow**: Stream `api_logs`, `audit_logs` via WebSocket, cache in Redis Streams (`logs:{merchant_id}`), enforce RBAC, log in `audit_logs`, track via PostHog (`logs_viewed`, <1s latency).
-
+- **GraphQL Query Examples**:
+  - **Query: Fetch Merchant Details for Management**
+    - **Purpose**: Retrieves merchant details for the Admin Module’s merchant management interface, used in `/admin/v1/merchants`.
+    - **Query**:
+      ```graphql
+      query GetMerchants($first: Int, $query: String) {
+        shops(first: $first, query: $query) {
+          edges {
+            node {
+              id
+              name
+              domain
+              plan {
+                displayName
+              }
+              metafield(namespace: "loyalnest", key: "onboarding_status") {
+                value
+              }
+            }
+          }
+        }
+      }
+      ```
+    - **Variables**: `{ "first": 10, "query": "domain:*.myshopify.com" }`
+    - **Use Case**: Admin Module displays merchant list with `onboarding_status` from `merchants` table, enabling plan management and search functionality.
+  - **Query: Update RFM Configuration**
+    - **Purpose**: Updates merchant’s RFM thresholds, used in `/admin/v1/rfm/config`.
+    - **Query**:
+      ```graphql
+      mutation UpdateMetafield($input: MetafieldInput!) {
+        metafieldStorefrontVisibilityCreate(input: {
+          namespace: "loyalnest"
+          key: "rfm_thresholds"
+          ownerType: SHOP
+        }) {
+          metafieldStorefrontVisibility {
+            id
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+        metafieldsSet(input: [$input]) {
+          metafields {
+            id
+            namespace
+            key
+            value
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+      ```
+    - **Variables**:
+      ```json
+      {
+        "input": {
+          "namespace": "loyalnest",
+          "key": "rfm_thresholds",
+          "value": "{\"recency\": {\"R5\": 14, \"R4\": 30}, \"frequency\": {\"F5\": 5, \"F4\": 3}, \"monetary\": {\"M5\": 500, \"M4\": 200}}",
+          "ownerId": "gid://shopify/Shop/123456789",
+          "type": "json"
+        }
+      }
+      ```
+    - **Use Case**: Admin Module updates `program_settings.rfm_thresholds` for RFM configuration, stored as a Shopify metafield and cached in Redis Streams (`rfm:preview:{merchant_id}`).
+  - **Query: Check Integration Health**
+    - **Purpose**: Verifies the status of third-party integrations (e.g., Klaviyo, Postscript), used in Integration Health monitoring.
+    - **Query**:
+      ```graphql
+      query GetAppInstallations($first: Int) {
+        appInstallations(first: $first) {
+          edges {
+            node {
+              id
+              app {
+                id
+                title
+              }
+              active
+            }
+          }
+        }
+      }
+      ```
+    - **Variables**: `{ "first": 10 }`
+    - **Use Case**: Admin Module monitors integration health (Shopify, Klaviyo, Postscript) by checking `appInstallations` status, logged in `audit_logs` for real-time updates.
+- **Service**: Admin Service (gRPC: `/admin.v1/*`, Dockerized), RFM Service (gRPC: `/rfm.v1/*`, Dockerized).
