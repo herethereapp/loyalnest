@@ -1,4 +1,4 @@
-# LoyalNest Full-Stack Development Study Plan (for university students - hcx, wqx)
+# LoyalNest Full-Stack Development Study Plan (for university student - He Chengxun)
 
 ## Objective
 
