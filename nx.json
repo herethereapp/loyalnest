@@ -65,16 +65,6 @@
         "componentTestingTargetName": "component-test",
         "ciTargetName": "e2e-ci"
       }
-    },
-    {
-      "plugin": "@nx/webpack/plugin",
-      "options": {
-        "buildTargetName": "build",
-        "serveTargetName": "serve",
-        "previewTargetName": "preview",
-        "buildDepsTargetName": "build-deps",
-        "watchDepsTargetName": "watch-deps"
-      }
     }
   ],
   "generators": {
