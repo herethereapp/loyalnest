@@ -190,22 +190,6 @@ core-service
 =========================
 Additional Steps to Ensure Functionality
 To ensure the updated main.ts works in your Nx monorepo and LoyalNest setup, complete these steps:
-1. Verify consul Dependency
-Ensure consul and @types/consul are installed in the root package.json:
-json{
-  "dependencies": {
-    "consul": "^1.2.0",
-    ...
-  },
-  "devDependencies": {
-    "@types/consul": "^0.5.0",
-    ...
-  }
-}
-If not installed, run:
-bashcd <project-root>
-npm install consul
-npm install --save-dev @types/consul
 2. Implement Health Check Endpoint
 Consul’s health check requires a /health endpoint at http://core:3000/api/health (due to globalPrefix: 'api'). If not already implemented, add a health controller.
 Example: apps/core-service/src/health/health.controller.ts
