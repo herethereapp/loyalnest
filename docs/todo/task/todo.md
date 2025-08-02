@@ -993,3 +993,26 @@ References
 : NestJS health checks for microservices.
 
 This revised docker-compose.yml adds the registrator service, enabling automatic Consul registration for LoyalNest’s microservices while maintaining the dedicated database setup. Update your main.ts files to remove manual Consul registration, and let me know if you need help with SQL schemas, health check implementations, or further Consul configuration!
+
+
+
+Update below documentation since audit-logs-service added and audit-logs table removed from users-service.
+
+admincore_service_plan.markdown
+project-plan.md
+every service plan
+loyalnest_phase3_roadmap.md
+US-AM5: Access Logs - in user stories
+features-must/should/could
+rfm.md
+microservice_design.md
+system_architecture_and_specifications.md
+resilience-config.md
+grpc_call_flow.md
+openapi_spec.md (every service)
+
+
+
+** project-plan
+** system_architecture_and_specifications
+- update graphQL, dedicated database per service, new added audit-logs-service
